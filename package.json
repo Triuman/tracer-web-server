@@ -4,6 +4,7 @@
   "description": "",
   "main": "app.js",
   "scripts": {
+    "start": "nodemon app.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
@@ -17,8 +18,21 @@
   },
   "homepage": "https://github.com/Triuman/tracer-web-server#readme",
   "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "ejs": "^2.5.7",
     "express": "^4.16.2",
+    "guid": "0.0.12",
+    "jsonwebtoken": "^8.1.0",
+    "mongodb": "^2.2.33",
+    "mongoose": "^4.13.5",
     "nodemon": "^1.12.1",
-    "socket.io": "^2.0.4"
+    "passport": "^0.4.0",
+    "passport-local": "^1.0.0",
+    "socket.io": "^2.0.4",
+    "ws": "^3.3.2"
+  },
+  "optionalDependencies": {
+    "bufferutil": "^3.0.3",
+    "utf-8-validate": "^3.0.4"
   }
 }
