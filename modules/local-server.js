@@ -9,11 +9,12 @@ module.exports = {
    gameServer = _gameServer;
 
    /* TODO: Put local server ip and port */ 
-   ws = new WebSocket('ws://demos.kaazing.com/echo');
+   //ws = new WebSocket('ws://demos.kaazing.com/echo');
+   ws = new WebSocket('ws://127.0.0.1:8188', "tracer-protocol");
    
    ws.on('open', function open() {
       console.log('connected to local server');
-      ws.send(JSON.stringify({a: 4}));
+      ws.send(JSON.stringify({ command:"controlcar", carid: "mycar", throttle: "43", steering: "14" }));
    });
 
    ws.on('close', function close() {

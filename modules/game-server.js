@@ -1,4 +1,4 @@
-import { clearTimeout } from 'timers';
+"use strict";
 
 var Guid = require('guid');
 var Jwt = require("jsonwebtoken");
@@ -70,8 +70,8 @@ const Enum_Room_Status = {
 
 //DB user pass: tracerwebserver**
 //Connection URL
-//const url = 'mongodb://tracer_web_server:tracerwebserver**@ds123796.mlab.com:23796/tracerdb';
-const url = 'mongodb://localhost:27017/tracerDB';
+const url = 'mongodb://tracer_web_server:tracerwebserver**@ds123796.mlab.com:23796/tracerdb';
+//const url = 'mongodb://localhost:27017/tracerDB';
 Mongoose.connect(url);
 var db = Mongoose.connection;
 
@@ -91,7 +91,7 @@ db.on("error", function (err) {
 //    db = _db;
 // });
 
-
+var io = null;
 module.exports = {
    start: function (httpServer) {
       localServer.start(localServerCallbacks);

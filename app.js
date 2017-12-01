@@ -30,4 +30,4 @@ app.get('/about', function(req, res) {
 });
 
 //start web server 
-httpServer.listen(process.env.PORT || 80);  //listen on port 80
+httpServer.listen(process.env.PORT || 8080);  //listen on port 80
