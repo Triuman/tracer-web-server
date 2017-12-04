@@ -298,7 +298,7 @@ module.exports = {
             socket.driver = null;
          });
 
-         socket.on('create_room', (data, callback) => {
+         socket.on('create-room', (data, callback) => {
             //Check if he is logged in
             if (!socket.driver) {
                callback({ success: false }); //TODO: Add reason
@@ -363,7 +363,7 @@ module.exports = {
             }
          });
 
-         socket.on('join_room', (data, callback) => {
+         socket.on('join-room', (data, callback) => {
             //Check if he is logged in
             if (!socket.driver) {
                callback({ success: false }); //TODO: Add reason
@@ -386,7 +386,7 @@ module.exports = {
                               room.drivers[d].controlled_car_id = null;
                            }
                            if (room.drivers[d].streamed_car_id) {
-                              localServer.cutStreamToDriver(driverId);
+                              localServer.stopStreamToDriver(driverId);
                               room.drivers[d].streamed_car_id = null;
                            }
                            room.save();
@@ -428,7 +428,7 @@ var localServerCallbacks = {
       if (socket) {
          socket.emit("offer", { sdp: offerSdp });
       } else {
-         localServer.cutConnectionToDriver(driverId);
+         localServer.disconnectDriver(driverId);
       }
    },
    on_webrtcup: function (driverId) {
