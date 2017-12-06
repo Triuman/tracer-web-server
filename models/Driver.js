@@ -13,9 +13,7 @@ var driverSchema = new mongoose.Schema({
    gold_medal: {type: Number, required: true},
    register_date: {type: Number, required: true},
    last_login_date: {type: Number, required: true},
-   status: {type: Number, required: true},
-   room: { type: mongoose.Schema.Types.ObjectId, ref: 'Room' },
-   car: { type: mongoose.Schema.Types.ObjectId, ref: 'Car' }
+   status: {type: Number, required: true}
 });
 
 var Driver = module.exports = mongoose.model("Driver", driverSchema);

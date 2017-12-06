@@ -9,8 +9,8 @@ module.exports = {
    gameServer = _gameServer;
 
    /* TODO: Put local server ip and port */ 
-   //ws = new WebSocket('ws://demos.kaazing.com/echo');
-   ws = new WebSocket('ws://127.0.0.1:8188', "tracer-protocol");
+   ws = new WebSocket('ws://demos.kaazing.com/echo');
+   //ws = new WebSocket('ws://127.0.0.1:8188', "tracer-protocol");
    
    ws.on('open', function open() {
       console.log('connected to local server');
