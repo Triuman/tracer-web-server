@@ -1,88 +1,96 @@
 //Keep all connection stuff with local server here.
 var WebSocket = require('ws');
 
-var ws = null; 
+var ws = null;
 var gameServer = null;
 
 module.exports = {
-   start: function(_gameServer){
-   gameServer = _gameServer;
+   start: function (_gameServer) {
+      gameServer = _gameServer;
 
-   /* TODO: Put local server ip and port */ 
-   ws = new WebSocket('ws://demos.kaazing.com/echo');
-   //ws = new WebSocket('ws://127.0.0.1:8188', "tracer-protocol");
-   
-   ws.on('open', function open() {
-      console.log('connected to local server');
-      //ws.send(JSON.stringify({ command:"controlcar", carid: "mycar", throttle: "43", steering: "14" }));
-      ws.send(JSON.stringify({ command:"connecttodriver", driverid:"driverId"}));
-      
-   });
+      /* TODO: Put local server ip and port */
+      ws = new WebSocket('ws://demos.kaazing.com/echo');
+      //ws = new WebSocket('ws://127.0.0.1:8188', "tracer-protocol");
 
-   ws.on('close', function close() {
-      console.log('disconnected from local server');
-   });
+      ws.on('open', function open() {
+         console.log('connected to local server');
+         //ws.send(JSON.stringify({ command:"controlcar", carid: "mycar", throttle: "43", steering: "14" }));
+         //ws.send(JSON.stringify({ command:"connecttodriver", driverid:"driverId"}));
 
-   ws.on('message', function incoming(data) {
-      var request = JSON.parse(data);
+      });
 
-      switch(request.info){
-         case 'offer':
-         //Send sdp to game server with driverId
-         gameServer.on_offer(request.driverid, request.sdp);
-         break;
-         case 'webrctup':
-         //Let Game Server know that driver connected to Local Server via WebRTC
-         gameServer.on_webrctup(request.driverid);
-         break;
-         case 'wrongid':
-         //Let Game Server know that driver gave wrong id to Local Server via WebRTC and disconnected
-         gameServer.on_wrongid(request.driverid);
-         break;
-      }
-   });
+      ws.on('close', function close() {
+         console.log('disconnected from local server');
+      });
+
+      ws.on('message', function incoming(data) {
+         console.log("LS says -> " + data);
+         var request = JSON.parse(data);
+
+         switch (request.info) {
+            case 'offer':
+               //Send sdp to game server with driverId
+               gameServer.on_offer(request.driverid, request.sdp);
+               break;
+            case 'webrctup':
+               //Let Game Server know that driver connected to Local Server via WebRTC
+               gameServer.on_webrctup(request.driverid);
+               break;
+            case 'verified':
+               //Let Game Server know that driver verified his ID.
+               gameServer.on_verified(request.driverid);
+               break;
+            case 'wrongid':
+               //Let Game Server know that driver gave wrong id to Local Server via WebRTC and disconnected
+               gameServer.on_wrongid(request.driverid);
+               break;
+         }
+      });
 
    },
-   sendMessage: function(msg){
-      if(ws.readyState == ws.OPEN)
+   sendMessage: function (msg) {
+      if (ws.readyState == ws.OPEN){
          ws.send(typeof msg === 'string' ? msg : JSON.stringify(msg));
+      }else{
+         console.log("LS connection is DOWN!");
+      }
    },
-   connectToDriver: function(driverId){
-      //Send a connect request with driverId to the local server
-      this.sendMessage({ command:"connecttodriver", driverid:driverId});
+   connectToDriver: function (driverid) {
+      //Tell LS to establish a webRTC connection with this Driver.
+      this.sendMessage({ command: "connecttodriver", driverid });
    },
-   disconnectDriver: function(driverId){
-      this.sendMessage({ command:"disconnectdriver", driverid:driverId });
+   disconnectDriver: function (driverid) {
+      this.sendMessage({ command: "disconnectdriver", driverid });
    },
-   streamToDriver: function(driverId, carId){
-      this.sendMessage({ command:"startstream", driverid:driverId, carid:carId });
+   streamToDriver: function (driverid, carid) {
+      this.sendMessage({ command: "startstream", driverid, carid });
    },
-   startStreamAndControl: function(driverId, carId){
-      this.sendMessage({ command:"startstreamandcontrol", driverid:driverId, carid:carId });
+   startStreamAndControl: function (driverid, carid) {
+      this.sendMessage({ command: "startstreamandcontrol", driverid, carid });
    },
-   stopStreamAndControl: function(driverId){
-      this.sendMessage({ command:"stopstreamandcontrol", driverid:driverId });
+   stopStreamAndControl: function (driverid) {
+      this.sendMessage({ command: "stopstreamandcontrol", driverid });
    },
-   stopStreamToDriver: function(driverId){
-      this.sendMessage({ command:"stopstream", driverid:driverId });
+   stopStreamToDriver: function (driverid) {
+      this.sendMessage({ command: "stopstream", driverid });
    },
-   giveControlToDriver: function(driverId, carId){
-      this.sendMessage({ command:"givecontrol", driverid:driverId, carid:carId });
+   giveControlToDriver: function (driverid, carid) {
+      this.sendMessage({ command: "givecontrol", driverid, carid });
    },
-   cutControlOfDriver: function(driverId){
-      this.sendMessage({ command:"removecontrol", driverid:driverId });
+   cutControlOfDriver: function (driverid) {
+      this.sendMessage({ command: "removecontrol", driverid });
    },
-   cutAllControls: function(){
-      this.sendMessage({ command:"removeallcontrols" });
+   cutAllControls: function () {
+      this.sendMessage({ command: "removeallcontrols" });
    },
-   cutAllStreams: function(){
-      this.sendMessage({ command:"stopallstreams" });
+   cutAllStreams: function () {
+      this.sendMessage({ command: "stopallstreams" });
    },
-   controlCar: function(carId){
-      this.sendMessage({ command:"controlcar", carid: "mycar", throttle: "43", steering: "14" });
+   controlCar: function (carid, throttle, steering) {
+      this.sendMessage({ command: "controlcar", carid, throttle, steering });
    },
-   sendAnswerSdp: function(driverId, answerSdp){
-      this.sendMessage({ command:"answersdp", answersdp:answerSdp });
+   sendAnswerSdp: function (driverId, answersdp) {
+      this.sendMessage({ command: "answersdp", answersdp });
    },
 
 }

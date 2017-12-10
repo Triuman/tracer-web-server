@@ -11,7 +11,7 @@ var driverSchema = new mongoose.Schema({
    bronze_medal: {type: Number, required: true},
    silver_medal: {type: Number, required: true},
    gold_medal: {type: Number, required: true},
-   register_date: {type: Number, required: true},
+   registeration_date: {type: Number, required: true},
    last_login_date: {type: Number, required: true},
    status: {type: Number, required: true}
 });
