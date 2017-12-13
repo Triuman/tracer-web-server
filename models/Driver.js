@@ -2,7 +2,7 @@ var mongoose = require("mongoose");
 
 var driverSchema = new mongoose.Schema({
    _id: mongoose.Schema.Types.ObjectId,
-   guid_id: {type: String, required: true},
+   uuid_id: {type: String, required: true},
    username: {type: String, required: true},
    email: {type: String, required: true},
    password: {type: String, required: true},

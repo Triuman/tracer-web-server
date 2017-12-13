@@ -7,8 +7,6 @@ var httpServer = http.createServer(app);
 var ejs = require('ejs');
 var WebSocket = require('ws');
 var path = require('path');
-var passport = require('passport')
-, LocalStrategy = require('passport-local').Strategy;
 
 //Custom Modules
 var gameServer = require('./modules/game-server');

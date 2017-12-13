@@ -2,7 +2,7 @@ var mongoose = require("mongoose");
 
 var roomSchema = new mongoose.Schema({
    _id: mongoose.Schema.Types.ObjectId,
-   guid_id: {type: String, required: true},
+   uuid_id: {type: String, required: true},
    name: {type: String, required: true},
    status: {type: Number, required: true},
    create_date: {type: Number, required: true},
