@@ -9,44 +9,68 @@ module.exports = {
       gameServer = _gameServer;
 
       /* TODO: Put local server ip and port */
-      ws = new WebSocket('ws://demos.kaazing.com/echo');
-      //ws = new WebSocket('ws://127.0.0.1:8188', "tracer-protocol");
-
-      ws.on('open', function open() {
-         console.log('connected to local server');
-         //ws.send(JSON.stringify({ command:"controlcar", carid: "mycar", throttle: "43", steering: "14" }));
-         //ws.send(JSON.stringify({ command:"connecttodriver", driverid:"driverId"}));
-
-      });
-
-      ws.on('close', function close() {
-         console.log('disconnected from local server');
-      });
-
-      ws.on('message', function incoming(data) {
-         console.log("LS says -> " + data);
-         var request = JSON.parse(data);
-
-         switch (request.info) {
-            case 'offer':
-               //Send sdp to game server with driverId
-               gameServer.on_offer(request.driverid, request.sdp);
-               break;
-            case 'webrctup':
-               //Let Game Server know that driver connected to Local Server via WebRTC
-               gameServer.on_webrctup(request.driverid);
-               break;
-            case 'verified':
-               //Let Game Server know that driver verified his ID.
-               gameServer.on_verified(request.driverid);
-               break;
-            case 'wrongid':
-               //Let Game Server know that driver gave wrong id to Local Server via WebRTC and disconnected
-               gameServer.on_wrongid(request.driverid);
-               break;
-         }
-      });
-
+      //var localServerAddress = 'ws://demos.kaazing.com/echo';
+      var localServerAddress = 'ws://127.0.0.1:8188';
+      var wsProtocol = "tracer-protocol";
+      
+      function connectToLocalServer(){
+         setTimeout(function(){
+            try{
+               ws = new WebSocket(localServerAddress, wsProtocol);
+               ws.on('error', function (err) {
+                  console.log(err);
+              });
+               ws.on('open', function open() {
+                  console.log('connected to local server');
+               });
+         
+               ws.on('close', function close() {
+                  console.log('disconnected from local server');
+                  console.log('trying to reconnect..');
+                  connectToLocalServer();
+               });
+         
+               ws.on('message', function incoming(data) {
+                  console.log("LS says -> " + data);
+                  var request = JSON.parse(data);
+         
+                  switch (request.info) {
+                     case 'offer':
+                        //Send sdp to game server with driverId
+                        gameServer.on_offer(request.driverid, request.sdp);
+                        break;
+                     case 'webrctup':
+                        //Let Game Server know that driver connected to Local Server via WebRTC
+                        gameServer.on_webrctup(request.driverid);
+                        break;
+                     case 'verified':
+                        //Let Game Server know that driver verified his ID.
+                        gameServer.on_verified(request.driverid);
+                        break;
+                     case 'hangup':
+                        //Let Game Server know that driver connected to Local Server via WebRTC
+                        gameServer.on_hangup(request.driverid);
+                        break;
+                     case 'wrongid':
+                        //Let Game Server know that driver gave wrong id to Local Server via WebRTC and disconnected
+                        gameServer.on_wrongid(request.driverid);
+                        break;
+                     case 'carconnected':
+                        //Let Game Server know that Car is connected to LS
+                        gameServer.on_carconnected(request.carid);
+                     break;
+                     case 'cardisconnected':
+                        //Let Game Server know that Car is disconnected from LS
+                        gameServer.on_cardisconnected(request.carid);
+                     break;
+                  }
+               });
+            }catch(err){
+               connectToLocalServer();
+            }
+         }, 3000);
+      }
+      connectToLocalServer();
    },
    sendMessage: function (msg) {
       if (ws.readyState == ws.OPEN){
@@ -89,8 +113,11 @@ module.exports = {
    controlCar: function (carid, throttle, steering) {
       this.sendMessage({ command: "controlcar", carid, throttle, steering });
    },
-   sendAnswerSdp: function (driverId, answersdp) {
-      this.sendMessage({ command: "answersdp", answersdp });
+   sendAnswerSdp: function (driverid, answersdp) {
+      this.sendMessage({ command: "answersdp", answersdp, driverid });
    },
-
+   sendCandidate: function (driverid, candidate) {
+      this.sendMessage({ command: "candidate", candidate, driverid });
+   },
+   
 }

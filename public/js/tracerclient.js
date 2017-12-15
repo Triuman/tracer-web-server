@@ -1,5 +1,8 @@
 "use strict";
 
+var driver = null;
+var token = null;
+
 const socket = io();
 
 socket.on('connect', () => {
@@ -12,6 +15,7 @@ socket.on('disconnect', () => {
 
 socket.on('offer', (data) => {
    console.log("Got offer! -> " + data.sdp);
+   WebRTCConnection.setOffer(data.sdp);
 });
 
 socket.on('global-chat', data => {
@@ -52,11 +56,15 @@ function Authenticate(u, p) {
       socket.emit("authenticate", { token: u }, (data) => {
          console.log("Are we authenticated? -> ");
          console.log(data);
+         driver = data.driver;
+         token = data.token;
       });
    } else {
       socket.emit("authenticate", { username: u, password: p }, (data) => {
          console.log("Are we authenticated? -> ");
          console.log(data);
+         driver = data.driver;
+         token = data.token;
       });
    }
 }
@@ -100,34 +108,22 @@ var WebRTCConnection = new function () {
 
    // send any ice candidates to the other peer
    pc.onicecandidate = function (evt) {
+      console.log("We got a candidate!");
       SendIceCandidate(evt.candidate);
    };
 
    // once remote stream arrives, show it in the remote video element
    pc.onaddstream = function (evt) {
-      remoteView.src = URL.createObjectURL(evt.stream);
+      console.log("We got remote stream!!");
+      //document.getElementById("remoteView").src = URL.createObjectURL(evt.stream);
    };
 
-   this.setOffer = function (sdp) {
-      pc.setRemoteDescription(new RTCSessionDescription(sdp)).then(function () {
-         pc.createAnswer(pc.remoteDescription, gotDescription);
-
-         function gotDescription(desc) {
-            pc.setLocalDescription(desc);
-            SendAnswer(desc);
-         }
-      });
-
-   };
-   this.setIceCandidate = function (candidate) {
-      pc.addIceCandidate(new RTCIceCandidate(candidate));
-   };
    
    var dataChannelOptions = {
       ordered: false, // do not guarantee order
       maxRetransmitTime: 500, // in milliseconds
    };
-   var dataChannel = peerConnection.createDataChannel("mychannel", dataChannelOptions);
+   var dataChannel = pc.createDataChannel("mychannel", dataChannelOptions);
 
    dataChannel.onerror = function (error) {
       console.log("Data Channel Error:", error);
@@ -139,10 +135,31 @@ var WebRTCConnection = new function () {
 
    dataChannel.onopen = function () {
       console.log("The Data Channel is Opened!");
-      //dataChannel.send("Hello World!");
+      dataChannel.send("0" + driver.uuid_id);
    };
 
    dataChannel.onclose = function () {
       console.log("The Data Channel is Closed");
    };
-}
+
+
+   function gotDescription(desc) {
+      pc.setLocalDescription(desc);
+      SendAnswer(desc);
+   }
+   function failedDescription(desc) {
+      console.log("Couldnt create answer.");
+   }
+
+   return {
+      setOffer: function (sdp) {
+         pc.setRemoteDescription(new RTCSessionDescription({type: "offer", sdp})).then(function () {
+            pc.createAnswer(gotDescription, failedDescription);
+         });
+
+      },
+      setIceCandidate: function (candidate) {
+         pc.addIceCandidate(new RTCIceCandidate(candidate));
+      }
+   };
+};
