@@ -82,6 +82,16 @@ const Enum_Room_Status = {
    CLOSED: 6 //if Race is null, then room is closed while in the queue
 };
 
+//Callback fail reasons
+const Enum_Callback_Reason = {
+   ALREADY_LOGGED_IN: 0,
+   NOT_LOGGED_IN: 1,
+   TOKEN_EXPIRED: 2,
+   WRONG_CREDENTIALS: 3,
+   MISSING_INFO: 4,
+   DB_ERROR: 5,
+   NOT_ENOUGH_COIN: 6
+};
 
 //DB user pass: tracerwebserver**
 //Connection URL
@@ -153,7 +163,7 @@ function main(httpServer) {
       socket.on('register', (data, callback) => {
          //check if all info given
          if (!(data.username && data.email && data.password)) {
-            callback({ success: false, reason: "One of the info is missing!" });
+            callback({ success: false, reason: Enum_Callback_Reason.MISSING_INFO}); //"One of the info is missing!"
             return;
          }
 
@@ -177,7 +187,7 @@ function main(httpServer) {
          });
          driver.save(function (err) {
             if (err) {
-               callback({ success: false, reason: "DB error!", error: err });
+               callback({ success: false, reason: Enum_Callback_Reason.DB_ERROR, error: err });
                return;
             } else {
                //keep driver info on the socket
@@ -267,19 +277,24 @@ function main(httpServer) {
       socket.on('authenticate', (data, callback) => {
          //check if all info given (username&&password or token)
          if (data.token) {
-            Jwt.verify(token, process.env.SECRET_KEY, function (err, driver) {
+            Jwt.verify(data.token, process.env.SECRET_KEY, function (err, driver) {
                if (err || !driver) {
-                  callback({ success: false, reason: "Jwt error", error: err });
+                  callback({ success: false, reason: Enum_Callback_Reason.TOKEN_EXPIRED, error: err }); //"Jwt error"
                   return;
                }
                //Check if this driver id has a info in ActiveDrivers. If so, dont allow him to login from here.
+               console.log(ActiveDrivers);
                if (ActiveDrivers[driver.uuid] && ActiveDrivers[driver.uuid].socket) {
-                  callback({ success: false, reason: "Already logged in from another tab." });
+                  callback({ success: false, reason: Enum_Callback_Reason.ALREADY_LOGGED_IN }); //"Already logged in from another tab."
                   return;
                }
-               Driver.findOne({ _id: driver._id }, function (err, d) {
-                  if (!d || err) {
-                     callback({ success: false, reason: "Couldnt find in DB.", error: err });
+               Driver.findOne({ uuid: driver.uuid }, function (err, d) {
+                  if (err) {
+                     callback({ success: false, reason: Enum_Callback_Reason.DB_ERROR, error: err });
+                     return;
+                  }
+                  if (!d) {
+                     callback({ success: false, reason: Enum_Callback_Reason.WRONG_CREDENTIALS}); //"Couldnt find in DB."
                      return;
                   }
                   //send driver info back
@@ -290,31 +305,35 @@ function main(httpServer) {
          } else if (data.username && data.password) {
             //Check username and password from DB                
             if (!db) {
-               callback({ success: false, reason: "DB is NULL" });
+               callback({ success: false, reason: Enum_Callback_Reason.DB_ERROR }); //"DB is NULL"
                return;
             }
             Driver.findOne({ username: data.username, password: data.password }, function (err, driver) {
-               if (err || !driver) {
-                  callback({ success: false, reason: "Couldnt find in DB.", error: err });
-                  return;
-               } else {
-                  //Check if this driver id has a socket in DriverSockets. If so, dont allow him to login from here.
-                  if (ActiveDrivers[driver.uuid] && ActiveDrivers[driver.uuid].socket) {
-                     callback({ success: false, reason: "Already logged in from another tab." });
-                     return;
-                  }
-                  //send driver info back
-                  callback({ success: true, driver: DriverViewModel(driver), token: logDriverIn(driver, socket) });
+               if (err) {
+                  callback({ success: false, reason: Enum_Callback_Reason.DB_ERROR, error: err });
                   return;
                }
+               if (!driver) {
+                  callback({ success: false, reason: Enum_Callback_Reason.WRONG_CREDENTIALS }); //"Couldnt find in DB."
+                  return;
+               }
+               //Check if this driver id has a socket in DriverSockets. If so, dont allow him to login from here.
+               if (ActiveDrivers[driver.uuid] && ActiveDrivers[driver.uuid].socket) {
+                  callback({ success: false, reason: Enum_Callback_Reason.ALREADY_LOGGED_IN }); //"Already logged in from another tab."
+                  return;
+               }
+               //send driver info back
+               callback({ success: true, driver: DriverViewModel(driver), token: logDriverIn(driver, socket) });
+               return;
+               
             });
          } else {
-            callback({ success: false, reason: "Missing info!" });
+            callback({ success: false, reason: Enum_Callback_Reason.MISSING_INFO });
             return;
          }
       });
 
-      socket.on('logout', data => {
+      socket.on('logout', (data, callback) => {
          //We keep socket connection and delete driver in active drivers.
          if (!socket.driver) {
             return;
@@ -329,17 +348,18 @@ function main(httpServer) {
          }
          delete ActiveDrivers[socket.driver.uuid];
          delete socket.driver;
+         callback({ success: true});
       });
 
       socket.on('create-room', (data, callback) => {
          //Check if he is logged in
          if (!socket.driver) {
-            callback({ success: false, reason: "Socket.driver is NULL." }); //TODO: Add reason
+            callback({ success: false, reason: Enum_Callback_Reason.NOT_LOGGED_IN }); //"Socket.driver is NULL."
             return;
          }
          //Check if track_id and room_name exist
          if (!data.track_id || !data.room_name) {
-            callback({ success: false, reason: "track_id or room_name is missing." }); //TODO: Add reason
+            callback({ success: false, reason: Enum_Callback_Reason.MISSING_INFO }); //"track_id or room_name is missing."
             return;
          }
 
@@ -385,8 +405,8 @@ function main(httpServer) {
             newRoom.drivers[driver.uuid] = { status: Enum_Driver_Room_Status.CONNECTING, controlled_car_id: null, streamed_car_id: null };
             newRoom.save(function (err, room) {
                if (err || !room) {
-                  console.log("Couldnt save new Room to DB! -> " + err);
-                  callback({ success: false, reason: "Couldnt save new Room to DB!", error: err });
+                  console.log("Couldnt save new Room to DB! -> ", err);
+                  callback({ success: false, reason: Enum_Callback_Reason.DB_ERROR, error: err });
                   return;
                }
                ActiveRooms[room.uuid] = room;
@@ -400,21 +420,21 @@ function main(httpServer) {
                callback({ success: true, reason: "Room is created! Uuid id: " + room.uuid });
             });
          } else {
-            callback({ success: false, reason: "Not enough COIN!" });
+            callback({ success: false, reason: Enum_Callback_Reason.NOT_ENOUGH_COIN });
          }
       });
 
       socket.on('join-room', (data, callback) => {
          //Check if he is logged in
          if (!socket.driver) {
-            callback({ success: false, reason: "socket.driver is NULL." }); //TODO: Add reason
+            callback({ success: false, reason: Enum_Callback_Reason.NOT_LOGGED_IN });
             return;
          }
          var driver = socket.driver;
 
          //Check if room_id exist
          if (!data.room_id) {
-            callback({ success: false, reason: "room_id is missing." }); //TODO: Add reason
+            callback({ success: false, reason: Enum_Callback_Reason.MISSING_INFO });
             return;
          }
 
@@ -458,12 +478,12 @@ function main(httpServer) {
                      callback({ success: true, reason: "Joined the room!" });
                   } else {
                      console.log("Could NOT update the room in DB and add the driver.");
-                     callback({ success: false, reason: "Could NOT update the room in DB and add the driver." });
+                     callback({ success: false, reason: Enum_Callback_Reason.DB_ERROR });
                   }
                });
             }
          } else {
-            callback({ success: false, reason: "Not enough COIN!" });
+            callback({ success: false, reason: Enum_Callback_Reason.NOT_ENOUGH_COIN });
          }
       });
 
@@ -476,19 +496,23 @@ function main(httpServer) {
       socket.on('authenticate', (data, callback) => {
          //check if all info given (username&&password or token)
          if (data.token) {
-            Jwt.verify(token, process.env.SECRET_KEY, function (err, admin) {
+            Jwt.verify(data.token, process.env.SECRET_KEY, function (err, admin) {
                if (err || !admin) {
-                  callback({ success: false, reason: "Jwt error", error: err });
+                  callback({ success: false, reason: Enum_Callback_Reason.TOKEN_EXPIRED, error: err }); //"Jwt error"
                   return;
                }
                //Check if this admin id has a info in ActiveAdmins. If so, dont allow him to login from here.
                if (ActiveAdmins[admin.uuid]) {
-                  callback({ success: false, reason: "Already logged in from another tab." });
+                  callback({ success: false, reason: Enum_Callback_Reason.ALREADY_LOGGED_IN });
                   return;
                }
-               Driver.findOne({ _id: admin._id }, function (err, a) {
-                  if (!a || err) {
-                     callback({ success: false, reason: "Couldnt find in DB.", error: err });
+               Driver.findOne({ uuid: admin.uuid }, function (err, a) {
+                  if (err) {
+                     callback({ success: false, reason: Enum_Callback_Reason.DB_ERROR, error: err });
+                     return;
+                  }
+                  if(!a){
+                     callback({ success: false, reason: Enum_Callback_Reason.WRONG_CREDENTIALS });
                      return;
                   }
                   socket.admin = a;
@@ -501,28 +525,31 @@ function main(httpServer) {
          } else if (data.username && data.password) {
             //Check username and password from DB                
             if (!db) {
-               callback({ success: false, reason: "DB is NULL" });
+               callback({ success: false, reason: Enum_Callback_Reason.DB_ERROR });
                return;
             }
             Driver.findOne({ username: data.username, password: data.password }, function (err, admin) {
-               if (err || !admin) {
-                  callback({ success: false, reason: "Couldnt find in DB.", error: err });
+               if (err) {
+                  callback({ success: false, reason: Enum_Callback_Reason.DB_ERROR, error: err });
                   return;
-               } else {
-                  //Check if this admin id has a socket in ActiveAdmins. If so, dont allow him to login from here.
-                  if (ActiveAdmins[admin.uuid]) {
-                     callback({ success: false, reason: "Already logged in from another tab." });
-                     return;
-                  }
-                  socket.admin = admin;
-                  ActiveAdmins[admin.uuid] = { admin: admin, socket: socket };
-                  //send driver info back
-                  callback({ success: true, token: getToken({ uuid: admin.uuid, username: admin.username }) });
+               } 
+               if (!admin) {
+                  callback({ success: false, reason: Enum_Callback_Reason.WRONG_CREDENTIALS });
+                  return;
+               } 
+               //Check if this admin id has an item in ActiveAdmins. If so, dont allow him to login from here.
+               if (ActiveAdmins[admin.uuid]) {
+                  callback({ success: false, reason: Enum_Callback_Reason.ALREADY_LOGGED_IN });
                   return;
                }
+               socket.admin = admin;
+               ActiveAdmins[admin.uuid] = { admin: admin, socket: socket };
+               //send driver info back
+               callback({ success: true, token: getToken({ uuid: admin.uuid, username: admin.username }) });
+               return;
             });
          } else {
-            callback({ success: false, reason: "Missing info!" });
+            callback({ success: false, reason: Enum_Callback_Reason.MISSING_INFO });
             return;
          }
       });

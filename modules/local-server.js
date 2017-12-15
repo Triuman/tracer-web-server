@@ -18,7 +18,7 @@ module.exports = {
             try{
                ws = new WebSocket(localServerAddress, wsProtocol);
                ws.on('error', function (err) {
-                  console.log(err);
+                  //console.log(err);
               });
                ws.on('open', function open() {
                   console.log('connected to local server');
