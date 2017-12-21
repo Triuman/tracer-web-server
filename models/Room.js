@@ -4,6 +4,7 @@ var roomSchema = new mongoose.Schema({
    _id: mongoose.Schema.Types.ObjectId,
    uuid: {type: String, required: true},
    name: {type: String, required: true},
+   password: {type: String, required: false},
    status: {type: Number, required: true},
    create_date: {type: Number, required: true},
    admin_id: {type: String, required: true},

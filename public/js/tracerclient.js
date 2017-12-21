@@ -8,7 +8,8 @@ const Enum_Callback_Reason = {
    WRONG_CREDENTIALS: 3,
    MISSING_INFO: 4,
    DB_ERROR: 5,
-   NOT_ENOUGH_COIN: 6
+   NOT_ENOUGH_COIN: 6,
+   ROOM_IS_FULL: 7
 };
 
 var driver = null;
@@ -30,6 +31,11 @@ window.onload = function () {
       console.log("Socket disconnected");
    });
 
+   socket.on('snapshot', (data) => {
+      console.log("Got a snapshot -> ");
+      console.log(data);
+   });
+
    socket.on('offer', (data) => {
       console.log("Got offer! -> " + data.sdp);
       WebRTCConnection.setOffer(data.sdp);
@@ -38,6 +44,9 @@ window.onload = function () {
    socket.on('global-chat', data => {
       console.log("Global chat ->");
       console.log(data);
+      if(data.track_id && data.chat){
+         //TODO: Append new chat to the track with track_id
+      }
    });
 
    socket.on('room-chat', data => {
@@ -175,8 +184,8 @@ function SendRoomChat(chat) {
    });
 }
 
-function SendGlobalChat(chat) {
-   socket.emit("global-chat", { chat }, (data) => {
+function SendGlobalChat(track_id, chat) {
+   socket.emit("global-chat", { track_id, chat }, (data) => {
       console.log("Did we send chat to everyone? -> ");
       console.log(data);
       if(data.success == false){
@@ -191,62 +200,70 @@ function SendGlobalChat(chat) {
 
 var WebRTCConnection = new function () {
    var pc;
+   var dataChannel;
    var configuration = {
       "iceServers": [{ "url": "stun:stun.1.google.com:19302" }]
    };
 
-   pc = new RTCPeerConnection(configuration);
-
-   // send any ice candidates to the other peer
-   pc.onicecandidate = function (evt) {
-      console.log("We got a candidate!");
-      SendIceCandidate(evt.candidate);
-   };
-
-   // once remote stream arrives, show it in the remote video element
-   pc.onaddstream = function (evt) {
-      console.log("We got remote stream!!");
-      //document.getElementById("remoteView").src = URL.createObjectURL(evt.stream);
-   };
-
-
-   var dataChannelOptions = {
-      ordered: false, // do not guarantee order
-      maxRetransmitTime: 500, // in milliseconds
-   };
-   var dataChannel = pc.createDataChannel("mychannel", dataChannelOptions);
-
-   dataChannel.onerror = function (error) {
-      console.log("Data Channel Error:", error);
-   };
-
-   dataChannel.onmessage = function (event) {
-      console.log("Got Data Channel Message:", event.data);
-   };
-
-   dataChannel.onopen = function () {
-      console.log("The Data Channel is Opened!");
-      dataChannel.send("0" + driver.uuid_id);
-   };
-
-   dataChannel.onclose = function () {
-      console.log("The Data Channel is Closed");
-   };
-
-
-   function gotDescription(desc) {
+   
+   function gotLocalDescription(desc) {
       pc.setLocalDescription(desc);
       SendAnswer(desc);
    }
-   function failedDescription(desc) {
+   function failedLocalDescription(desc) {
       console.log("Couldnt create answer.");
    }
 
    return {
       setOffer: function (sdp) {
+         //Each time we get a new offer, we create a new RTCPeerConnection.
+
+         if(pc)
+            pc.close();
+         pc = new RTCPeerConnection(configuration);
+
+         // send any ice candidates to the other peer
+         pc.onicecandidate = function (evt) {
+            console.log("We got a candidate!");
+            SendIceCandidate(evt.candidate);
+         };
+      
+         // once remote stream arrives, show it in the remote video element
+         pc.onaddstream = function (evt) {
+            console.log("We got remote stream!!");
+            //document.getElementById("remoteView").src = URL.createObjectURL(evt.stream);
+         };
+      
+         
          pc.setRemoteDescription(new RTCSessionDescription({ type: "offer", sdp })).then(function () {
-            pc.createAnswer(gotDescription, failedDescription);
+            pc.createAnswer(gotLocalDescription, failedLocalDescription);
          });
+      
+         var dataChannelOptions = {
+            ordered: false, // do not guarantee order
+            maxRetransmitTime: 500, // in milliseconds
+         };
+         if(dataChannel)
+            dataChannel.close();
+         dataChannel = pc.createDataChannel("mychannel", dataChannelOptions);
+      
+         dataChannel.onerror = function (error) {
+            console.log("Data Channel Error:", error);
+         };
+      
+         dataChannel.onmessage = function (event) {
+            console.log("Got Data Channel Message:", event.data);
+         };
+      
+         dataChannel.onopen = function () {
+            console.log("The Data Channel is Opened!");
+            dataChannel.send("0" + driver.uuid_id);
+         };
+      
+         dataChannel.onclose = function () {
+            console.log("The Data Channel is Closed");
+         };
+
 
       },
       setIceCandidate: function (candidate) {
