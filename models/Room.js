@@ -9,7 +9,7 @@ var roomSchema = new mongoose.Schema({
    create_date: {type: Number, required: true},
    admin_id: {type: String, required: true},
    track_id: {type: String, required: true},
-   drivers: {type: Object, required: true}, //{ driver_id, status, controlled_car_id, streamed_car_id }
+   drivers: {type: Object, required: true}, //{driver_id: {status, controlled_car_id, streamed_car_id }}
    race: {type: Object, required: false}
 });
 

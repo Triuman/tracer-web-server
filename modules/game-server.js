@@ -47,8 +47,13 @@ process.env.SECRET_KEY = "*/THISISSECRET/*";
 const Enum_Driver_Status = {
    ONLINE: 0,
    OFFLINE: 1,
-   JOINING_ROOM: 2,
-   IN_ROOM: 3
+   IN_ROOM: 2,
+   CONNECTED_TO_LOCAL_SERVER: 3,
+};
+
+const Enum_Driver_Room_Status = {
+   NOT_READY: 0,
+   READY: 1
 };
 
 const Enum_Room_Status = {
@@ -70,7 +75,10 @@ const Enum_Callback_Reason = {
    MISSING_INFO: 4,
    DB_ERROR: 5,
    NOT_ENOUGH_COIN: 6,
-   ROOM_IS_FULL: 7
+   ROOM_IS_FULL: 7,
+   SAME_USERNAME_OR_EMAIL_EXIST: 8,
+   NO_TRACK_WITH_GIVEN_ID: 9,
+   NO_ROOM_WITH_GIVEN_ID: 10
 };
 
 //DB user pass: tracerwebserver**
@@ -93,7 +101,7 @@ module.exports.start = function (httpServer) {
       //    console.log("All rooms removed!");
       // });
 
-      //TODO: Take all necessary info to variables(ActiveRooms, ActiveDriver, Snapshot etc) then start socketio server.
+      //Take all necessary info to variables(ActiveRooms, ActiveDriver, Snapshot etc) then start socketio server.
       Track.find({}, function (err, tracks) {
          if (err) {
             console.log("Error while getting Tracks from DB.-> " + err);
@@ -146,11 +154,11 @@ module.exports.start = function (httpServer) {
          //Wait for drivers in the rooms to get online. If they are not online after a while, remove them from both room and ActiveDrivers.
          for (var driverUuid in ActiveDrivers) {
             if (!ActiveDrivers[driverUuid].socket) {
-               delete ActiveRooms[ActiveDrivers[driverUuid].room.uuid].drivers[driverUuid];
+               RemoveDriverFromRoom(driverUuid);
                delete ActiveDrivers[driverUuid];
             }
          }
-      }, 20000);
+      }, 5000);
 
 
       setTimeout(() => {
@@ -181,15 +189,13 @@ function main(httpServer) {
       });
 
       socket.on('global-chat', data => {
-         //{track_id, chat}
-         //Emit to everyone
-         io.emit("global-chat", data);
+         UpdateEmitter.emitUpdate[UpdateEmitter.UpdateTypes.GLOBAL_CHAT](data.track_id, data.chat);
       });
 
       socket.on('room-chat', data => {
          //Emit to room if roomId exist
          if (socket.driver && ActiveDrivers[socket.driver.uuid].room)
-            io.to(ActiveDrivers[socket.driver.uuid].room.uuid).emit('room-chat', data);
+            UpdateEmitter.emitUpdate[UpdateEmitter.UpdateTypes.ROOM_CHAT](ActiveDrivers[socket.driver.uuid].room.uuid, data.chat);
       });
 
       socket.on('answer', (data, callback) => {
@@ -204,6 +210,22 @@ function main(httpServer) {
          localServer.sendCandidate(socket.driver.uuid, data.candidate);
       });
 
+      socket.on('ready', (callback) => {
+         if (!socket.driver || !ActiveDrivers[socket.driver.uuid].room)
+            return;
+         ActiveDrivers[socket.driver.uuid].room.drivers[socket.driver.uuid].status = Enum_Driver_Room_Status.READY;
+         UpdateEmitter.emitUpdate[UpdateEmitter.UpdateTypes.DRIVER_IS_READY](ActiveDrivers[socket.driver.uuid].room.uuid, socket.driver.uuid);
+         callback({ success: true });
+      });
+
+      socket.on('notready', (callback) => {
+         if (!socket.driver || !ActiveDrivers[socket.driver.uuid].room)
+            return;
+         ActiveDrivers[socket.driver.uuid].room.drivers[socket.driver.uuid].status = Enum_Driver_Room_Status.NOT_READY;
+         UpdateEmitter.emitUpdate[UpdateEmitter.UpdateTypes.DRIVER_IS_NOT_READY](ActiveDrivers[socket.driver.uuid].room.uuid, socket.driver.uuid);
+         callback({ success: true });
+      });
+
       socket.on('register', (data, callback) => {
          //check if all info given
          if (!(data.username && data.email && data.password)) {
@@ -211,36 +233,47 @@ function main(httpServer) {
             return;
          }
 
-         //TODO: Check if there is another user with this username or email address. If so, return false.
-
-         //create new driver in DB
-         var driver = new Driver({
-            _id: new Mongoose.Types.ObjectId(),
-            uuid: uuidv4(),
-            username: data.username,
-            email: data.email,
-            password: data.password,
-            coin: 10, //TODO: Get this value from DB.
-            xp: 0,
-            bronze_medal: 0,
-            silver_medal: 0,
-            gold_medal: 0,
-            registeration_date: Date.now(),
-            last_login_date: Date.now(),
-            status: Enum_Driver_Status.ONLINE
-         });
-         driver.save(function (err) {
-            if (err) {
-               callback({ success: false, reason: Enum_Callback_Reason.DB_ERROR, error: err });
+         //Check if there is another user with this username or email address. If so, return false.
+         Driver.findOne({
+            $or: [
+               { username: data.username },
+               { email: data.email }]
+         }, function (err, existingDriver) {
+            if (existingDriver) {
+               callback({ success: false, reason: Enum_Callback_Reason.SAME_USERNAME_OR_EMAIL_EXIST, error: err });
                return;
-            } else {
-               //keep driver info on the socket
-               socket.driver = driver;
-               //keep the socket by its driver id to access it when a message comes from the local server
-               ActiveDrivers[driver.uuid] = { driver: driver, socket: socket };
-               //send driver info back
-               callback({ success: true, driver: DriverViewModel(driver), token: getToken(DriverViewModel(driver), 60 * 60 * 24) });
             }
+
+            //create new driver in DB
+            var driver = new Driver({
+               _id: new Mongoose.Types.ObjectId(),
+               uuid: uuidv4(),
+               username: data.username,
+               email: data.email,
+               password: data.password,
+               coin: 10, //TODO: Get this value from DB.
+               xp: 0,
+               bronze_medal: 0,
+               silver_medal: 0,
+               gold_medal: 0,
+               registeration_date: Date.now(),
+               last_login_date: Date.now(),
+               status: Enum_Driver_Status.ONLINE
+            });
+            driver.save(function (err) {
+               if (err) {
+                  callback({ success: false, reason: Enum_Callback_Reason.DB_ERROR, error: err });
+                  return;
+               } else {
+                  //keep driver info on the socket
+                  socket.driver = driver;
+                  //keep the socket by its driver id to access it when a message comes from the local server
+                  ActiveDrivers[driver.uuid] = { driver: driver, socket: socket };
+                  //send driver info back
+                  callback({ success: true, driver: DriverViewModel(driver), token: getToken(DriverViewModel(driver), 60 * 60 * 24) });
+               }
+            });
+
          });
       });
 
@@ -248,26 +281,19 @@ function main(httpServer) {
          driver.status = Enum_Driver_Status.OFFLINE;
          driver.save();
          if (ActiveDrivers[driver.uuid].room) {
+            var room = ActiveDrivers[driver.uuid].room;
             //Remove driver from socket.io room too
-            ActiveDrivers[driver.uuid].socket.leave(ActiveDrivers[driver.uuid].room.uuid);
+            ActiveDrivers[driver.uuid].socket.leave(room.uuid);
             //let others in the room know this driver got offline
-            io.to(ActiveDrivers[driver.uuid].room.uuid).emit('update', { type: "offline", driver_id: driver.uuid });
-            if (ActiveDrivers[driver.uuid].room.status == Enum_Room_Status.IN_QUEUE) {
+            UpdateEmitter.emitUpdate[UpdateEmitter.UpdateTypes.DRIVER_GOT_OFFLINE](room.uuid, driver.uuid);
+            if (room.status == Enum_Room_Status.IN_QUEUE) {
                var timeoutId = setTimeout(function () {
                   console.log("Waited enough for the Driver. Removing from room and ActiveDrivers.");
-                  var room = ActiveDrivers[driver.uuid].room;
-                  //remove driver from the room
-                  if (room.drivers[driver.uuid]) {
-                     //TODO: If this player is the admin of the room, set second driver as new admin and let drivers in the room know that.
-                     delete room.drivers[driver.uuid];
-                     room.save();
-                     localServer.disconnectDriver(driver.uuid);
-                     //let others in the room know this driver left the room
-                     io.to(room.uuid).emit('update', { type: "leave", driver_id: driver.uuid });
-                     delete ActiveDrivers[driver.uuid];
-                     delete DriverTimeouts[driver.uuid];
-                     //TODO: Also let everyone know about this room update
-                  }
+                  RemoveDriverFromRoom(driver.uuid);
+                  //let others in the room know this driver left the room
+                  UpdateEmitter.emitUpdate[UpdateEmitter.UpdateTypes.DRIVER_LEFT_ROOM](room.uuid, Object.keys(room.drivers).length, driver.uuid);
+                  delete ActiveDrivers[driver.uuid];
+                  delete DriverTimeouts[driver.uuid];
                }, 20000);
                DriverTimeouts[driver.uuid] = timeoutId;
             }
@@ -289,9 +315,8 @@ function main(httpServer) {
          //Check if driver was in a room and disconnected. If so, connect him to the room.
          if (ActiveDrivers[driver.uuid]) {
             if (ActiveDrivers[driver.uuid].room && ActiveRooms[ActiveDrivers[driver.uuid].room.uuid]) {
-               driver.status = Enum_Driver_Status.JOINING_ROOM;
+               driver.status = Enum_Driver_Status.IN_ROOM;
                driver.save();
-               localServer.connectToDriver(driver.uuid);
             } else {
                ActiveDrivers[driver.uuid].room = null;
             }
@@ -376,13 +401,7 @@ function main(httpServer) {
          }
 
          //If driver is in a room, take him out.
-         var room = ActiveDrivers[socket.driver.uuid].room;
-         if (room && room.drivers[socket.driver.uuid]) {
-            //TODO: If this player is the admin of the room, set second driver as new admin and let drivers in the room know that.
-            delete room.drivers[socket.driver];
-            room.save();
-            localServer.disconnectDriver(driverId);
-         }
+         RemoveDriverFromRoom(socket.driver.uuid);
          delete ActiveDrivers[socket.driver.uuid];
          delete socket.driver;
          callback({ success: true });
@@ -400,8 +419,11 @@ function main(httpServer) {
             return;
          }
 
-         //TODO: Check if a track with track_id exist
-
+         //Check if a track with track_id exist
+         if(!Tracks[data.track_id]){
+            callback({ success: false, reason: Enum_Callback_Reason.NO_TRACK_WITH_GIVEN_ID });
+            return;
+         }
          var driver = socket.driver;
 
          //Check if driver has enough money to join the race.
@@ -410,16 +432,9 @@ function main(httpServer) {
             if (ActiveDrivers[driver.uuid].room) {
                var room = ActiveDrivers[driver.uuid].room;
                //remove driver from the room
-               if (room.drivers[driverId]) {
-                  //TODO: If this player is the admin of the room, set second driver as new admin and let drivers in the room know that.
-                  delete room.drivers[driverId];
-                  delete ActiveDrivers[driver.uuid].room;
-                  localServer.stopStreamAndControl(driverId);
-                  room.save();
-                  break;
-               }
+               RemoveDriverFromRoom(driver.uuid);
                //let others in the room know this driver left the room
-               io.to(room.uuid).emit('update', { type: "leave", driver_id: driver.uuid });
+               UpdateEmitter.emitUpdate[UpdateEmitter.UpdateTypes.DRIVER_LEFT_ROOM](room.uuid, Object.keys(room.drivers).length, driver.uuid);
                //Remove driver from socket.io room too
                ActiveDrivers[driver.uuid].socket.leave(room.uuid);
                //TODO: Also let everyone know about this room update
@@ -437,7 +452,7 @@ function main(httpServer) {
                track_id: data.track_id,
                drivers: {}
             });
-            newRoom.drivers[driver.uuid] = { controlled_car_id: null, streamed_car_id: null };
+            newRoom.drivers[driver.uuid] = { status: Enum_Driver_Room_Status.NOT_READY, controlled_car_id: null, streamed_car_id: null };
             newRoom.save(function (err, room) {
                if (err || !room) {
                   console.log("Couldnt save new Room to DB! -> ", err);
@@ -447,15 +462,13 @@ function main(httpServer) {
                ActiveRooms[room.uuid] = room;
                ActiveDrivers[driver.uuid].room = room;
                ActiveDrivers[driver.uuid].socket.join(room.uuid);
-               ActiveDrivers[driver.uuid].driver.status = Enum_Driver_Status.JOINING_ROOM;
+               ActiveDrivers[driver.uuid].driver.status = Enum_Driver_Status.IN_ROOM;
                ActiveDrivers[driver.uuid].driver.save();
-               //Ask local-server to connect to this driver and wait for the webrtcup message
-               localServer.connectToDriver(driver.uuid);
-               //when you get webrtcup message, create a new room (in both DB and socket.io) and add the driver to the room.
                callback({ success: true, reason: "Room is created! Uuid id: " + room.uuid });
             });
          } else {
             callback({ success: false, reason: Enum_Callback_Reason.NOT_ENOUGH_COIN });
+            return;
          }
       });
 
@@ -473,45 +486,45 @@ function main(httpServer) {
             return;
          }
 
+         //Check if room exist.
+         if(!ActiveRooms[data.room_id]){
+            callback({ success: false, reason: Enum_Callback_Reason.NO_ROOM_WITH_GIVEN_ID });
+            return;
+         }
+
          //TODO: Check if the room is full already.
+         if(Object.keys(ActiveRooms[data.room_id].drivers).length >= MAX_ROOM_CAPACITY){
+            callback({ success: false, reason: Enum_Callback_Reason.ROOM_IS_FULL });
+            return;
+         }
 
          //Check if driver has enough money to join the race.
          if (driver.coin >= COIN_PER_RACE) {
-            //Check If driver is in another room already. if so, first get him out of that room by changing the driver_room_status.
+            //Check If driver is in another room already. if so, first get him out of that room.
             if (ActiveDrivers[driver.uuid].room) {
                var room = ActiveDrivers[driver.uuid].room;
                //remove driver from the room
-               if (room.drivers[driver.uuid]) {
-                  //TODO: If this player is the admin of the room, set second driver as new admin and let drivers in the room know that.
-                  delete room.drivers[driver.uuid];
-                  delete ActiveDrivers[driver.uuid].room;
-                  localServer.stopStreamAndControl(driver.uuid);
-                  room.save();
-
-                  //let others in the room know this driver left the room
-                  io.to(room.uuid).emit('update', { type: "leave", driver_id: driver.uuid });
-                  //Remove driver from socket.io room too
-                  socket.leave(room.uuid);
-                  //TODO: Also let everyone know about this room update
-                  ActiveDrivers[driver.uuid].room = null;
-               }
+               RemoveDriverFromRoom(driver.uuid);
+               //let others in the room know this driver left the room
+               UpdateEmitter.emitUpdate[UpdateEmitter.UpdateTypes.DRIVER_LEFT_ROOM](room.uuid, Object.keys(room.drivers).length, driver.uuid);
+               //Remove driver from socket.io room too
+               socket.leave(room.uuid);
+               //TODO: Also let everyone know about this room update
                delete ActiveDrivers[driver.uuid].room;
             }
 
             //Find the room and add the driver
             if (ActiveRooms[data.room_id]) {
                var room = ActiveRooms[data.room_id];
-               room.drivers[driver.uuid] = { controlled_car_id: null, streamed_car_id: null };
+               room.drivers[driver.uuid] = { status: Enum_Driver_Room_Status.NOT_READY, controlled_car_id: null, streamed_car_id: null };
+               room.markModified("drivers");
                room.save(function (err, updatedRoom) {
                   if (updatedRoom) {
                      ActiveRooms[updatedRoom.uuid] = updatedRoom;
                      ActiveDrivers[driver.uuid].room = updatedRoom;
-                     ActiveDrivers[driver.uuid].driver.status = Enum_Driver_Status.JOINING_ROOM;
+                     ActiveDrivers[driver.uuid].driver.status = Enum_Driver_Status.IN_ROOM;
                      ActiveDrivers[driver.uuid].driver.save();
-                     //Ask local-server to connect to this driver and wait for the webrtcup message
-                     localServer.connectToDriver(driver.uuid);
-                     socket.join(updatedRoom.uuid);
-                     //when you get webrtcup message, create a new room (in both DB and socket.io) and add the driver to the room. 
+                     ActiveDrivers[driver.uuid].socket.join(updatedRoom.uuid);
                      callback({ success: true, reason: "Joined the room!" });
                   } else {
                      console.log("Could NOT update the room in DB and add the driver.");
@@ -525,6 +538,113 @@ function main(httpServer) {
       });
 
    });
+
+
+
+
+   //Update:
+   // - Room Created
+   // - Room Closed
+   // - Room Entered Race
+   // - Room Finished Race
+   // - Driver Joined Room
+   // - Driver Left Room
+
+   var UpdateEmitter = new function(){
+      this.UpdateTypes = {
+         ROOM_CREATED: 0,
+         ROOM_CLOSED: 1,
+         ROOM_ENTERED_RACE: 2,
+         ROOM_FINISHED_RACE: 3,
+         DRIVER_JOINED_ROOM: 4,
+         DRIVER_LEFT_ROOM: 5,
+         DRIVER_GOT_OFFLINE: 6,
+         DRIVER_IS_READY: 7,
+         DRIVER_IS_NOT_READY: 8,
+         ADMIN_CHANGED: 9,
+         GLOBAL_CHAT: 10,
+         ROOM_CHAT: 11
+      };
+
+      this.emitUpdate = [];
+      this.emitUpdate[this.UpdateTypes.ROOM_CREATED] = function(track_id, room_view){
+         io.emit("update", {type: this.UpdateTypes.ROOM_CREATED, data: {room_view}});
+      };
+      this.emitUpdate[this.UpdateTypes.ROOM_CLOSED] = function(room_id){
+         io.emit("update", {type: this.UpdateTypes.ROOM_CLOSED, data: {room_id}});
+      };
+      this.emitUpdate[this.UpdateTypes.ROOM_IS_READY] = function(room_id){
+         io.emit("update", {type: this.UpdateTypes.ROOM_IS_READY, data: {room_id}});
+      };
+      this.emitUpdate[this.UpdateTypes.ROOM_IS_NOT_READY] = function(room_id){
+         io.emit("update", {type: this.UpdateTypes.ROOM_IS_NOT_READY, data: {room_id}});
+      };
+      this.emitUpdate[this.UpdateTypes.ROOM_ENTERED_RACE] = function(room_id){
+         io.emit("update", {type: this.UpdateTypes.ROOM_ENTERED_RACE, data: {room_id}});
+      };
+      this.emitUpdate[this.UpdateTypes.ROOM_FINISHED_RACE] = function(room_id){
+         io.emit("update", {type: this.UpdateTypes.ROOM_FINISHED_RACE, data: {room_id}});
+      };
+      this.emitUpdate[this.UpdateTypes.DRIVER_JOINED_ROOM] = function(room_id, driver_count, driver_view){
+         io.emit("update", {type: this.UpdateTypes.DRIVER_JOINED_ROOM, data: {room_id, driver_count}});
+         io.to(room_id).emit("room-update",  {type: this.UpdateTypes.DRIVER_JOINED_ROOM, data: {driver_view}});
+      };
+      this.emitUpdate[this.UpdateTypes.DRIVER_LEFT_ROOM] = function(room_id, driver_count, driver_id){
+         io.emit("update", {type: this.UpdateTypes.DRIVER_LEFT_ROOM, data: {room_id, driver_count}});
+         io.to(room_id).emit("room-update",  {type: this.UpdateTypes.DRIVER_LEFT_ROOM, data: {driver_id}});
+      };
+      this.emitUpdate[this.UpdateTypes.DRIVER_GOT_OFFLINE] = function(room_id, driver_id){
+         io.to(room_id).emit("room-update",  {type: this.UpdateTypes.DRIVER_GOT_OFFLINE, data: {driver_id}});
+      };
+      this.emitUpdate[this.UpdateTypes.DRIVER_IS_READY] = function(room_id, driver_id){
+         io.to(room_id).emit("room-update",  {type: this.UpdateTypes.DRIVER_IS_READY, data: {driver_id}});
+      };
+      this.emitUpdate[this.UpdateTypes.DRIVER_IS_NOT_READY] = function(room_id, driver_id){
+         io.to(room_id).emit("room-update",  {type: this.UpdateTypes.DRIVER_IS_NOT_READY, data: {driver_id}});
+      };
+      this.emitUpdate[this.UpdateTypes.ADMIN_CHANGED] = function(room_id, driver_id){
+         io.to(room_id).emit("room-update",  {type: this.UpdateTypes.ADMIN_CHANGED, data: {driver_id}});
+      };
+      this.emitUpdate[this.UpdateTypes.GLOBAL_CHAT] = function(track_id, chat){
+         io.emit("update", {type: this.UpdateTypes.GLOBAL_CHAT, data: {track_id, chat}});
+      };
+      this.emitUpdate[this.UpdateTypes.ROOM_CHAT] = function(room_id, chat){
+         io.to(room_id).emit("room-update",  {type: this.UpdateTypes.ROOM_CHAT, data: {chat}});
+      };
+
+   };
+
+   function RemoveDriverFromRoom(driverid) {
+      var room = ActiveDrivers[driverid].room;
+      //remove driver from the room
+      if (room.drivers[driverid]) {
+         //if this was the only driver in the room, close the room.
+         if(Object.keys(room.drivers).length <= 1){
+            room.status = Enum_Room_Status.CLOSED;
+            //If we close the room, we do not need to send a DRIVER_LEFT_ROOM update. ROOM_CLOSED update is enough.
+            UpdateEmitter.emitUpdate[UpdateEmitter.UpdateTypes.ROOM_CLOSED](room.uuid);
+         }else {
+            UpdateEmitter.emitUpdate[UpdateEmitter.UpdateTypes.DRIVER_LEFT_ROOM](room.uuid, Object.keys(room.drivers).length - 1);
+            if (room.admin_id == driverid) {
+               //TODO: If this player was the admin of the room, set second driver as new admin and let drivers in the room know that.
+               for(uuid in room.drivers){
+                  if(uuid != driverid){
+                     room.admin_id = uuid;
+                     UpdateEmitter.emitUpdate[UpdateEmitter.UpdateTypes.ADMIN_CHANGED](uuid);
+                     break;
+                  }
+               }
+            }
+         }
+         delete room.drivers[driverid];
+         room.markModified("drivers");
+         room.save();
+         delete ActiveDrivers[driver.uuid].room;
+         if (ActiveDrivers[driver.uuid].status == Enum_Driver_Status.CONNECTED_TO_LOCAL_SERVER)
+            localServer.disconnectDriver(driverid);
+         ActiveDrivers[driver.uuid].status = Enum_Driver_Status.ONLINE;
+      }
+   }
 
    ioadmin = io.of('/tradmin');
    ioadmin.on('connection', function (socket) {
@@ -692,7 +812,7 @@ function getToken(data, expiresIn) {
 
 var localServerCallbacks = {
    on_offer: function (driverId, sdp) {
-      if (!(ActiveDrivers[driverId] && ActiveDrivers[driverId].socket && ActiveDrivers[driverId].driver.status == Enum_Driver_Status.JOINING_ROOM)) {
+      if (!(ActiveDrivers[driverId] && ActiveDrivers[driverId].socket && ActiveDrivers[driverId].driver.status == Enum_Driver_Status.IN_ROOM)) {
          localServer.disconnectDriver(driverId);
          return;
       }
@@ -703,8 +823,7 @@ var localServerCallbacks = {
    },
    on_verified: function (driverId) {
 
-      //Driver verified his ID with LS. Add this driver to the room.
-      //Change driver's status in the room drivers list and add driver to the socket.io room
+      //Driver verified his ID with LS.
 
       //Check if driver is in a room and room has a status IN_RACE, if so, connect him to the car
       if (!ActiveDrivers[driverId]) {
@@ -748,15 +867,12 @@ var localServerCallbacks = {
          else if (room.status == Enum_Room_Status.CLOSED) {
             //This is unlikely but may happen.
             //Room is closed already. So cut the Webrtc connection and change status of the driver.
-            localServer.disconnectDriver(driverId);
             driver.status = Enum_Driver_Status.ONLINE;
             driver.save();
-            delete room.drivers[driverId];
-            delete ActiveDrivers[driverId].room;
+            RemoveDriverFromRoom(driver.uuid);
             return;
          }
-         driver.status = Enum_Driver_Status.IN_ROOM;
-         driver.save();
+         driver.status = Enum_Driver_Status.CONNECTED_TO_LOCAL_SERVER;
          socket.join(room.uuid);
          return;
       }
@@ -783,11 +899,7 @@ var localServerCallbacks = {
       driver.save();
 
       if (room && room.drivers[driverId]) {
-         if(room.admin_id == driverId){
-            //TODO: If this player was the admin of the room, set second driver as new admin and let drivers in the room know that.
-         }
-         delete room.drivers[driverId];
-         room.save();
+         RemoveDriverFromRoom(driver.uuid);
       }
       socket.disconnect();
       delete socket.driver;
@@ -800,6 +912,7 @@ var localServerCallbacks = {
       //TODO: Notify Admins
    }
 };
+
 
 var DriverViewModel = function (driver) {
    return {
