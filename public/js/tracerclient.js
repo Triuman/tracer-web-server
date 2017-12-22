@@ -15,6 +15,12 @@ const Enum_Callback_Reason = {
    NO_ROOM_WITH_GIVEN_ID: 10
 };
 
+const Enum_Driver_Room_Status = {
+   OFFLINE: 0,
+   NOT_READY: 1,
+   READY: 2
+};
+
 const UpdateTypes = {
    ROOM_CREATED: 0,
    ROOM_CLOSED: 1,
@@ -22,12 +28,13 @@ const UpdateTypes = {
    ROOM_FINISHED_RACE: 3,
    DRIVER_JOINED_ROOM: 4,
    DRIVER_LEFT_ROOM: 5,
-   DRIVER_GOT_OFFLINE: 6,
-   DRIVER_IS_READY: 7,
-   DRIVER_IS_NOT_READY: 8,
-   ADMIN_CHANGED: 9,
-   GLOBAL_CHAT: 10,
-   ROOM_CHAT: 11
+   DRIVER_GOT_ONLINE: 6,
+   DRIVER_GOT_OFFLINE: 7,
+   DRIVER_IS_READY: 8,
+   DRIVER_IS_NOT_READY: 9,
+   ADMIN_CHANGED: 10,
+   GLOBAL_CHAT: 11,
+   ROOM_CHAT: 12
 };
 
 var driver = null;
@@ -70,6 +77,9 @@ window.onload = function () {
    RoomUpdateHandler[UpdateTypes.DRIVER_LEFT_ROOM] = function (data) {
       //remove driver from the slot
    };
+   RoomUpdateHandler[UpdateTypes.DRIVER_GOT_ONLINE] = function (data) {
+      //change slot to online/not ready view
+   };
    RoomUpdateHandler[UpdateTypes.DRIVER_GOT_OFFLINE] = function (data) {
       //change slot to offline view
    };
@@ -87,6 +97,7 @@ window.onload = function () {
       console.log(data);
    };
 
+   //TODO: If you cannot find a track or room or driver with the given id on updates, there is an inconsistency. So, request a new snapshot from the Web Server to catch up.
    socket.on('update', (update) => {
       console.log("Got update! -> " + update);
       UpdateHandler[update.type](update.data);
