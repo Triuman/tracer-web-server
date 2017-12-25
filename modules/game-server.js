@@ -465,7 +465,7 @@ function main(httpServer) {
             return;
          }
 
-         //TODO: Check if the room is full already.
+         //Check if the room is full already.
          if (Object.keys(ActiveRooms[data.room_id].drivers).length >= MAX_ROOM_CAPACITY) {
             callback({ success: false, reason: Enum_Callback_Reason.ROOM_IS_FULL });
             return;
@@ -482,7 +482,6 @@ function main(httpServer) {
                UpdateManager.emitUpdate[UpdateManager.UpdateTypes.DRIVER_LEFT_ROOM](room.uuid, Object.keys(room.drivers).length, driver.uuid);
                //Remove driver from socket.io room too
                socket.leave(room.uuid);
-               //TODO: Also let everyone know about this room update
                delete ActiveDrivers[driver.uuid].room;
             }
 
@@ -687,7 +686,7 @@ function main(httpServer) {
          } else {
             UpdateManager.emitUpdate[UpdateManager.UpdateTypes.DRIVER_LEFT_ROOM](room.uuid, Object.keys(room.drivers).length - 1);
             if (room.admin_id == driverid) {
-               //TODO: If this player was the admin of the room, set second driver as new admin and let drivers in the room know that.
+               //If this player was the admin of the room, set second driver as new admin and let drivers in the room know that.
                for (uuid in room.drivers) {
                   if (uuid != driverid) {
                      room.admin_id = uuid;
@@ -821,6 +820,7 @@ function main(httpServer) {
       socket.on('takenextroomin', (data, callback) => {
          //TODO: If the current room is still in race, disconnect them from LS and show result screen.
          //Take next room to the game waiting screen.
+         //Send createrace command to LS with driver and car ids.
 
       });
 
@@ -880,12 +880,6 @@ var localServerCallbacks = {
       ActiveDrivers[driverId].socket.emit("offer", { sdp: sdp });
    },
    on_webrctup: function (driverId) {
-      //Nothing to do here for now. We will wait for Driver to verify his ID.
-   },
-   on_verified: function (driverId) {
-
-      //Driver verified his ID with LS.
-
       //Check if driver is in a room and room has a status IN_RACE, if so, connect him to the car
       if (!ActiveDrivers[driverId]) {
          localServer.disconnectDriver(driverId);
@@ -937,34 +931,10 @@ var localServerCallbacks = {
          socket.join(room.uuid);
          return;
       }
-
    },
    on_hangup: function (driverId) {
       //Driver got disconnected from Local Server. If driver is still connected to Web Server, we should try to connect him to LS again.
       //If driver also disconnected from here, we will just wait him to come again. If he doesnt come, timeout in onDisconnect() will remove him from the room.
-   },
-   on_wrongid: function (driverId) {
-      //Driver somehow gave the wrong id to Local Server and LS cut the webrtc connection.
-      //Remove Driver from the room that he wanted to join. And let everyone know this.
-      if (!ActiveDrivers[driverId]) {
-         //Probably a malicious attack happened.
-         console.log("Malicious attack might have happened. DriverId: " + driverId);
-         return;
-      }
-
-      var driver = ActiveDrivers[driverId].driver;
-      var socket = ActiveDrivers[driverId].socket;
-      var room = ActiveDrivers[driverId].room;
-
-      driver.status = Enum_Driver_Status.ONLINE;
-      driver.save();
-
-      if (room && room.drivers[driverId]) {
-         RemoveDriverFromRoom(driver.uuid);
-      }
-      socket.disconnect();
-      delete socket.driver;
-      delete ActiveDrivers[driverId];
    },
    on_carconnected: function () {
       //TODO: Notify Admins

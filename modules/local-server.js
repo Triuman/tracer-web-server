@@ -22,6 +22,7 @@ module.exports = {
               });
                ws.on('open', function open() {
                   console.log('connected to local server');
+                  //ws.send(JSON.stringify({command: "addtrack", id: "myNewTrack1", list1: [[5.3, 2.5],[6.3, 4.5],[45.3, 53.64],[92.32, 41.63]], list2: [[5.3, 2.5],[6.3, 4.5],[45.3, 53.64],[92.32, 41.63],[92.32, 41.63],[92.32, 41.63],[92.32, 41.63],[92.32, 41.63],[92.32, 41.63],[92.32, 41.63],[92.32, 41.63],[92.32, 41.63],[92.32, 41.63],[92.32, 41.63],[92.32, 41.63],[92.32, 41.63],[92.32, 41.63],[92.32, 41.63],[92.32, 41.63],[92.32, 41.63],[92.32, 41.63],[92.32, 41.63],[92.32, 41.63],[92.32, 41.63],[92.32, 41.63],[92.32, 41.63],[92.32, 41.63],[92.32, 41.63],[92.32, 41.63],[92.32, 41.63],[92.32, 41.63],[92.32, 41.63],[92.32, 41.63],[92.32, 41.63],[92.32, 41.63],[92.32, 41.63],[92.32, 41.63],[92.32, 41.63],[92.32, 41.63],[92.32, 41.63],[92.32, 41.63],[92.32, 41.63],[92.32, 41.63],[92.32, 41.63],[92.32, 41.63],[92.32, 41.63],[92.32, 41.63],[92.32, 41.63],[92.32, 41.63],[92.32, 41.63],[92.32, 41.63],[92.32, 41.63],[92.32, 41.63],[92.32, 41.63],[92.32, 41.63],[92.32, 41.63],[92.32, 41.63],[92.32, 41.63],[92.32, 41.63],[92.32, 41.63],[92.32, 41.63],[92.32, 41.63],[92.32, 41.63],[92.32, 41.63],[92.32, 41.63],[92.32, 41.63],[92.32, 41.63],[92.32, 41.63],[92.32, 41.63],[92.32, 41.63],[92.32, 41.63],[92.32, 41.63],[92.32, 41.63],[92.32, 41.63],[92.32, 41.63],[92.32, 41.63],[92.32, 41.63],[92.32, 41.63],[92.32, 41.63],[92.32, 41.63],[92.32, 41.63],[92.32, 41.63],[92.32, 41.63],[92.32, 41.63],[92.32, 41.63],[92.32, 41.63],[92.32, 41.63],[92.32, 41.63],[92.32, 41.63],[92.32, 41.63],[92.32, 41.63],[92.32, 41.63],[92.32, 41.63],[92.32, 41.63],[92.32, 41.63],[92.32, 41.63],[92.32, 41.63],[92.32, 41.63],[92.32, 41.63],[92.32, 41.63],[92.32, 41.63],[92.32, 41.63],[92.32, 41.63],[92.32, 41.63],[92.32, 41.63],[92.32, 41.63]]}));
                });
          
                ws.on('close', function close() {
@@ -43,17 +44,9 @@ module.exports = {
                         //Let Game Server know that driver connected to Local Server via WebRTC
                         gameServer.on_webrctup(request.driverid);
                         break;
-                     case 'verified':
-                        //Let Game Server know that driver verified his ID.
-                        gameServer.on_verified(request.driverid);
-                        break;
                      case 'hangup':
                         //Let Game Server know that driver connected to Local Server via WebRTC
                         gameServer.on_hangup(request.driverid);
-                        break;
-                     case 'wrongid':
-                        //Let Game Server know that driver gave wrong id to Local Server via WebRTC and disconnected
-                        gameServer.on_wrongid(request.driverid);
                         break;
                      case 'carconnected':
                         //Let Game Server know that Car is connected to LS
@@ -79,6 +72,26 @@ module.exports = {
          console.log("LS connection is DOWN!");
       }
    },
+   createTrack: function (id, list1, list2) {
+      //Driver count can be bigger than car id count but not vice versa. LS will ignore the extra cars anyways.
+      this.sendMessage({ command: "createtrack", id, list1, list2 });
+   },
+   createRace: function (id, max_duration, drivers, cars) {
+      //Driver count can be bigger than car id count but not vice versa. LS will ignore the extra cars anyways.
+      this.sendMessage({ command: "createrace", id, max_duration, driver_ids, car_ids });
+   },
+   addCarToRace: function (carid, raceid, driverid) {
+      this.sendMessage({ command: "addcartorace", carid, raceid, driverid });
+   },
+   removeCarFromRace: function (carid) {
+      this.sendMessage({ command: "removecarfromrace", carid, raceid });
+   }, 
+   startRace: function (raceid) {
+      this.sendMessage({ command: "startrace", raceid });
+   },
+   endRace: function (raceid) {
+      this.sendMessage({ command: "endrace", raceid });
+   },
    connectToDriver: function (driverid) {
       //Tell LS to establish a webRTC connection with this Driver.
       this.sendMessage({ command: "connecttodriver", driverid });
@@ -98,17 +111,20 @@ module.exports = {
    stopStreamToDriver: function (driverid) {
       this.sendMessage({ command: "stopstream", driverid });
    },
+   setDriverOfCar: function (driverid, carid) {
+      this.sendMessage({ command: "setdriverofcar", driverid, carid });
+   },
    giveControlToDriver: function (driverid, carid) {
-      this.sendMessage({ command: "givecontrol", driverid, carid });
+      this.sendMessage({ command: "addcontrol", driverid, carid });
    },
    cutControlOfDriver: function (driverid) {
       this.sendMessage({ command: "removecontrol", driverid });
    },
-   cutAllControls: function () {
-      this.sendMessage({ command: "removeallcontrols" });
+   cutAllControls: function (raceid) {
+      this.sendMessage({ command: "removeallcontrols", raceid });
    },
-   cutAllStreams: function () {
-      this.sendMessage({ command: "stopallstreams" });
+   cutAllStreams: function (raceid) {
+      this.sendMessage({ command: "stopallstreams", raceid });
    },
    controlCar: function (carid, throttle, steering) {
       this.sendMessage({ command: "controlcar", carid, throttle, steering });
