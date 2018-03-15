@@ -112,7 +112,8 @@ const Enum_Callback_Reason = {
    ROOM_IS_FULL: 7,
    SAME_USERNAME_OR_EMAIL_EXIST: 8,
    NO_TRACK_WITH_GIVEN_ID: 9,
-   NO_ROOM_WITH_GIVEN_ID: 10
+   NO_ROOM_WITH_GIVEN_ID: 10,
+   STILL_IN_RACE: 11 //If adming tries to take next room in while there is a race running on a track, we will send this reason.
 };
 
 //DB user pass: tracerwebserver**
@@ -304,7 +305,7 @@ function main(httpServer) {
                   //keep the socket by its driver id to access it when a message comes from the local server
                   ActiveDrivers[driver.uuid] = { driver: driver, socket: socket };
                   //send driver info back
-                  callback({ success: true, driver: DriverPrivateViewModel(driver), token: getToken(DriverPrivateViewModel(driver), 60 * 60 * 24) });
+                  callback({ success: true, driver: DriverPrivateViewModel(driver), token: createNewToken(DriverPrivateViewModel(driver), 60 * 60 * 24) });
                }
             });
 
@@ -565,7 +566,7 @@ function main(httpServer) {
       driver.save();
       //db.collection("drivers").updateOne({ _id: driver.uuid },{ $set:{ last_login: driver.last_login, status: driver.status }});
       //Create new token with expiration date
-      return getToken(DriverPrivateViewModel(driver), 60 * 60 * 24);
+      return createNewToken(DriverPrivateViewModel(driver), 60 * 60 * 24);
    }
 
 
@@ -735,7 +736,7 @@ function main(httpServer) {
                   socket.admin = a;
                   ActiveAdmins[admin.uuid] = { admin: a, socket: socket };
                   //send admin info back
-                  callback({ success: true, token: getToken({ uuid: a.uuid, username: a.username }) });
+                  callback({ success: true, token: createNewToken({ uuid: a.uuid, username: a.username }) });
                });
 
             });
@@ -762,7 +763,7 @@ function main(httpServer) {
                socket.admin = admin;
                ActiveAdmins[admin.uuid] = { admin: admin, socket: socket };
                //send driver info back
-               callback({ success: true, token: getToken({ uuid: admin.uuid, username: admin.username }) });
+               callback({ success: true, token: createNewToken({ uuid: admin.uuid, username: admin.username }) });
                return;
             });
          } else {
@@ -798,72 +799,70 @@ function main(httpServer) {
       });
 
       socket.on('startrace', (data, callback) => {
-         //TODO: Send start race command to LS.
-
+         //LS will give control to all drivers in the race and set race->is_started to TRUE;
+         localServer.startRace(data.race_id);
       });
 
       socket.on('pauserace', (data, callback) => {
-         //TODO: Send pause race command to LS.
-
+         //LS will set race->is_paused to TRUE and stop increasing race->elapsed_time.
+         localServer.pauseRace(data.race_id);
       });
 
       socket.on('resumerace', (data, callback) => {
-         //TODO: Send resume race command to LS.
-
+         //LS will set race->is_paused to FALSE to remove controls and to stop increasing race->elapsed_time.
+         localServer.resumeRace(data.race_id);
+      });
+      socket.on('endrace', (data, callback) => {
+         //LS will calculate ratings and send them to both drivers and Web Server. Then, LS will disconnect drivers.
+         localServer.endRace(data.race_id);
       });
 
       socket.on('abortrace', (data, callback) => {
-         //TODO: Send abort race command to LS.
-
+         //LS will send a abort message to drivers and disconnect them and remove race.
+         localServer.abortRace(data.race_id);
       });
 
       socket.on('takenextroomin', (data, callback) => {
-         //TODO: If the current room is still in race, disconnect them from LS and show result screen.
-         //Take next room to the game waiting screen.
+         //TODO: If the current room is still in race, return false with reason STILL_IN_RACE.
+         //Take first ready room in the queue of the selected track to the game waiting screen.
          //Send createrace command to LS with driver and car ids.
-
+         localServer.createRace(data.race_id, data.max_duration, data.drivers, data.cars);
       });
 
       socket.on('controlcar', (data, callback) => {
-         //TODO: Send control command LS.
-
+         localServer.controlCar(data.car_id, data.throttle, data.steering);
       });
 
       socket.on('removedriver', (data, callback) => {
-         //TODO: Remove Driver from the room and disconnect from LS. Direct him to result screen and show him as kicked.
-
+         //Remove Driver from the room and disconnect from LS. Direct him to result screen and show him as kicked.
+         localServer.RemoveDriverFromRoom(data.driver_id);
       });
 
       socket.on('streamtodriver', (data, callback) => {
-         //TODO: Tell LS to stream Car camera to the Driver.
-
+         //Tell LS to stream Car camera to the Driver.
+         localServer.streamToDriver(data.driver_id, data.car_id);
       });
 
       socket.on('stopstream', (data, callback) => {
-         //TODO: Tell LS to stop streaming to this Driver.
-
+         //Tell LS to stop streaming to this Driver.
+         localServer.stopStreamToDriver(data.driver_id);
       });
 
       socket.on('givecontrol', (data, callback) => {
-         //TODO: Tell LS to give control of the Car to this Driver.
-
+         //Tell LS to give control of the Car to this Driver.
+         localServer.giveControlToDriver(data.driver_id, data.car_id);
       });
 
       socket.on('cutcontrol', (data, callback) => {
-         //TODO: Tell LS to remove control of the Car of this Driver.
-
-      });
-
-      socket.on('movecartotrack', (data, callback) => {
-         //TODO: Move Car to another track. Set in DB.
-
+         //Tell LS to remove control of the Car of this Driver.
+         localServer.cutControlOfDriver(data.driver_id);
       });
 
    });
 
 };
 
-function getToken(data, expiresIn) {
+function createNewToken(data, expiresIn) {
    var token = Jwt.sign(data, process.env.SECRET_KEY, {
       expiresIn: expiresIn || (60 * 60 * 24) //in seconds
    });

@@ -89,8 +89,17 @@ module.exports = {
    startRace: function (raceid) {
       this.sendMessage({ command: "startrace", raceid });
    },
+   pauseRace: function (raceid) {
+      this.sendMessage({ command: "pauserace", raceid });
+   },
+   resumeRace: function (raceid) {
+      this.sendMessage({ command: "resumerace", raceid });
+   },
    endRace: function (raceid) {
       this.sendMessage({ command: "endrace", raceid });
+   },
+   abortRace: function (raceid) {
+      this.sendMessage({ command: "abortrace", raceid });
    },
    connectToDriver: function (driverid) {
       //Tell LS to establish a webRTC connection with this Driver.
