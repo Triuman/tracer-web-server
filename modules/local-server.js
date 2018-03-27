@@ -73,10 +73,9 @@ module.exports = {
       }
    },
    createTrack: function (id, list1, list2) {
-      //Driver count can be bigger than car id count but not vice versa. LS will ignore the extra cars anyways.
       this.sendMessage({ command: "createtrack", id, list1, list2 });
    },
-   createRace: function (id, max_duration, drivers, cars) {
+   createRace: function (id, max_duration, driver_ids, car_ids) {
       //Driver count can be bigger than car id count but not vice versa. LS will ignore the extra cars anyways.
       this.sendMessage({ command: "createrace", id, max_duration, driver_ids, car_ids });
    },
@@ -143,6 +142,9 @@ module.exports = {
    },
    sendCandidate: function (driverid, candidate) {
       this.sendMessage({ command: "candidate", candidate, driverid });
+   },
+   setStreamUrl: function (carid, url) {
+      this.sendMessage({ command: "setstreamurl", url, carid });
    },
    
 }

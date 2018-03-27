@@ -5,6 +5,7 @@ var carSchema = new mongoose.Schema({
    uuid: {type: String, required: true},
    name: {type: String, required: true},
    status: {type: String, required: true},
+   stream_url: {type: String, required: true},
    track_id: {type: String, required: true},
    battery_status: {type: Number, required: true}
 });
