@@ -10,7 +10,8 @@ module.exports = {
 
       /* TODO: Put local server ip and port */
       //var localServerAddress = 'ws://demos.kaazing.com/echo';
-      var localServerAddress = 'ws://127.0.0.1:8188';
+      //var localServerAddress = 'ws://127.0.0.1:8188';
+      var localServerAddress = 'ws://192.168.1.21:8188';
       var wsProtocol = "tracer-protocol";
       
       function connectToLocalServer(){
@@ -68,6 +69,7 @@ module.exports = {
    sendMessage: function (msg) {
       if (ws.readyState == ws.OPEN){
          ws.send(typeof msg === 'string' ? msg : JSON.stringify(msg));
+         console.log("Sent message to Local Sever -> " + (typeof msg === 'string' ? msg : JSON.stringify(msg)));
       }else{
          console.log("LS connection is DOWN!");
       }
@@ -102,11 +104,27 @@ module.exports = {
    },
    connectToDriver: function (driverid) {
       //Tell LS to establish a webRTC connection with this Driver.
-      this.sendMessage({ command: "connecttodriver", driverid });
+      this.sendMessage({ command: "connecttodriver", id:driverid });
    },
    disconnectDriver: function (driverid) {
       this.sendMessage({ command: "disconnectdriver", driverid });
    },
+   //#########################################
+   //REMOVE LINE BELOW!!!!!
+   streamToDriverModified: function (driverid) {
+    this.sendMessage({ command: "startstream", driverid });
+    },
+    watch: function (id) {
+      this.sendMessage({ command: "watch", id });
+   },
+   startRecording: function (driverid) {
+      this.sendMessage({ command: "startrecording", driverid });
+   },
+   stopRecording: function (driverid) {
+      this.sendMessage({ command: "stoprecording", driverid });
+   },
+   //#########################################
+   //#########################################
    streamToDriver: function (driverid, carid) {
       this.sendMessage({ command: "startstream", driverid, carid });
    },

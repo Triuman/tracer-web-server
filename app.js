@@ -25,8 +25,13 @@ app.get('/', function(req, res) {
 });
 
 // about page 
-app.get('/about', function(req, res) {
-   res.render('about');
+app.get('/admin', function(req, res) {
+   res.render('admin');
+});
+
+// about page 
+app.get('/janusindex', function(req, res) {
+   res.render('janusindex');
 });
 
 //start web server 

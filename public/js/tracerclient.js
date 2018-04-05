@@ -62,12 +62,13 @@ window.onload = function () {
    });
 
    socket.on('offer', (data) => {
-      console.log("Got offer! -> " + data.sdp);
+      console.log("Got offer! -> ", data.sdp);
       WebRTCConnection.setOffer(data.sdp);
    });
 
    socket.on('room-update', (update) => {
-      console.log("Got room update! -> " + update);
+      console.log("Got room update! -> ");
+      console.log(update);
       UpdateHandler[update.type](update.data);
    });
    var RoomUpdateHandler = {};
@@ -99,7 +100,8 @@ window.onload = function () {
 
    //TODO: If you cannot find a track or room or driver with the given id on updates, there is an inconsistency. So, request a new snapshot from the Web Server to catch up.
    socket.on('update', (update) => {
-      console.log("Got update! -> " + update);
+      console.log("Got update! -> ");
+      console.log(update);
       UpdateHandler[update.type](update.data);
    });
 
@@ -308,7 +310,7 @@ var WebRTCConnection = new function () {
    var pc;
    var dataChannel;
    var configuration = {
-      "iceServers": [{ "url": "stun:stun.1.google.com:19302" }]
+      "iceServers": [{ "urls": ["stun:stun.1.google.com:19302"] }]
    };
 
 
@@ -335,9 +337,10 @@ var WebRTCConnection = new function () {
          };
 
          // once remote stream arrives, show it in the remote video element
-         pc.onaddstream = function (evt) {
+         pc.ontrack = function (event) {
             console.log("We got remote stream!!");
-            //document.getElementById("remoteView").src = URL.createObjectURL(evt.stream);
+            //document.getElementById("remoteView").srcObject = event.streams[0];
+            document.getElementById("remoteView").src = URL.createObjectURL(event.streams[0]);
          };
 
 
@@ -345,30 +348,30 @@ var WebRTCConnection = new function () {
             pc.createAnswer(gotLocalDescription, failedLocalDescription);
          });
 
-         var dataChannelOptions = {
-            ordered: false, // do not guarantee order
-            maxRetransmitTime: 500, // in milliseconds
-         };
-         if (dataChannel)
-            dataChannel.close();
-         dataChannel = pc.createDataChannel("mychannel", dataChannelOptions);
+      //    var dataChannelOptions = {
+      //       ordered: false, // do not guarantee order
+      //       maxRetransmitTime: 500, // in milliseconds
+      //    };
+      //    if (dataChannel)
+      //       dataChannel.close();
+      //    dataChannel = pc.createDataChannel("mychannel", dataChannelOptions);
 
-         dataChannel.onerror = function (error) {
-            console.log("Data Channel Error:", error);
-         };
+      //    dataChannel.onerror = function (error) {
+      //       console.log("Data Channel Error:", error);
+      //    };
 
-         dataChannel.onmessage = function (event) {
-            console.log("Got Data Channel Message:", event.data);
-         };
+      //    dataChannel.onmessage = function (event) {
+      //       console.log("Got Data Channel Message:", event.data);
+      //    };
 
-         dataChannel.onopen = function () {
-            console.log("The Data Channel is Opened!");
-            dataChannel.send("0" + driver.uuid_id);
-         };
+      //    dataChannel.onopen = function () {
+      //       console.log("The Data Channel is Opened!");
+      //       dataChannel.send("0" + driver.uuid_id);
+      //    };
 
-         dataChannel.onclose = function () {
-            console.log("The Data Channel is Closed");
-         };
+      //    dataChannel.onclose = function () {
+      //       console.log("The Data Channel is Closed");
+      //    };
 
 
       },

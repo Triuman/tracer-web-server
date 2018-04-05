@@ -1,13 +1,26 @@
 
-const socket = io('/tradmin');
+var socket;
 
-socket.on('connect', () => {
-   console.log("Socket connected");
-});
+window.onload = function () {
+   socket = io('/tradmin');
 
-socket.on('disconnect', () => {
-   console.log("Socket disconnected");
-});
+   socket.on('connect', () => {
+      console.log("Socket connected");
+      //Try to login if we have token in the local storage
+      var token = localStorage.getItem("token");
+      if (token)
+         Authenticate(token);
+
+   });
+
+   socket.on('disconnect', () => {
+      console.log("Socket disconnected");
+   });
+
+
+
+}
+
 
 
 function Authenticate(u, p){
@@ -49,6 +62,41 @@ function KickDriverOut(race_id, driver_id){
 function StartAllStreams(chat){
    socket.emit("start-all-streams", { track_id }, (data) => {
       console.log("Did we send chat to everyone? -> ");
+      console.log(data);
+   });
+}
+
+function ConnectToDriverModified(driver_id){
+   socket.emit("connecttodrivermodified", { driver_id }, (data) => {
+      console.log("Did we connect to driver : ? -> " + driver_id);
+      console.log(data);
+   });
+}
+
+function Watch(driver_id){
+   socket.emit("watch", { driver_id }, (data) => {
+      console.log("Did we start watching : ? -> " + driver_id);
+      console.log(data);
+   });
+}
+
+function StartRecording(driver_id){
+   socket.emit("startrecording", { driver_id }, (data) => {
+      console.log("Did we start recording : ? -> " + driver_id);
+      console.log(data);
+   });
+}
+
+function StopRecording(driver_id){
+   socket.emit("stoprecording", { driver_id }, (data) => {
+      console.log("Did we stop recording : ? -> " + driver_id);
+      console.log(data);
+   });
+}
+
+function StartToDriverModified(driver_id){
+   socket.emit("streamtodrivermodified", { driver_id }, (data) => {
+      console.log("Did we start stream to driver : ? -> " + driver_id);
       console.log(data);
    });
 }
