@@ -11,7 +11,7 @@ module.exports = {
       /* TODO: Put local server ip and port */
       //var localServerAddress = 'ws://demos.kaazing.com/echo';
       //var localServerAddress = 'ws://127.0.0.1:8188';
-      var localServerAddress = 'ws://192.168.1.21:8188';
+      var localServerAddress = 'ws://192.168.1.26:8188';
       var wsProtocol = "tracer-protocol";
       
       function connectToLocalServer(){

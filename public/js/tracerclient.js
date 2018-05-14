@@ -339,8 +339,11 @@ var WebRTCConnection = new function () {
          // once remote stream arrives, show it in the remote video element
          pc.ontrack = function (event) {
             console.log("We got remote stream!!");
-            //document.getElementById("remoteView").srcObject = event.streams[0];
-            document.getElementById("remoteView").src = URL.createObjectURL(event.streams[0]);
+            try{
+                  document.getElementById("remoteView").srcObject = event.streams[0];
+            } catch(err) {
+                  document.getElementById("remoteView").src = URL.createObjectURL(event.streams[0]);
+            }
          };
 
 
