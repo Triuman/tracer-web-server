@@ -11,7 +11,7 @@ module.exports = {
       /* TODO: Put local server ip and port */
       //var localServerAddress = 'ws://demos.kaazing.com/echo';
       //var localServerAddress = 'ws://127.0.0.1:8188';
-      var localServerAddress = 'ws://192.168.1.26:8188';
+      var localServerAddress = 'ws://192.168.1.34:8188';
       var wsProtocol = "tracer-protocol";
       
       function connectToLocalServer(){
@@ -39,7 +39,7 @@ module.exports = {
                   switch (request.info) {
                      case 'offer':
                         //Send sdp to game server with driverId
-                        gameServer.on_offer(request.driverid, request.sdp);
+                        gameServer.on_offer(request.driverid, request.sdp, request.isleft);
                         break;
                      case 'webrctup':
                         //Let Game Server know that driver connected to Local Server via WebRTC
@@ -155,11 +155,11 @@ module.exports = {
    controlCar: function (carid, throttle, steering) {
       this.sendMessage({ command: "controlcar", carid, throttle, steering });
    },
-   sendAnswerSdp: function (driverid, answersdp) {
-      this.sendMessage({ command: "answersdp", answersdp, driverid });
+   sendAnswerSdp: function (driverid, answersdp, isleft) {
+      this.sendMessage({ command: "answersdp", answersdp, driverid, isleft });
    },
-   sendCandidate: function (driverid, candidate) {
-      this.sendMessage({ command: "candidate", candidate, driverid });
+   sendCandidate: function (driverid, candidate, isleft) {
+      this.sendMessage({ command: "candidate", candidate, driverid, isleft });
    },
    setStreamUrl: function (carid, url) {
       this.sendMessage({ command: "setstreamurl", url, carid });

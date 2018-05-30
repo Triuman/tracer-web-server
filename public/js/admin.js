@@ -80,6 +80,13 @@ function Watch(driver_id){
    });
 }
 
+function SetDriverOfCar(driver_id, car_id){
+   socket.emit("setdriverofcar", { driver_id, car_id }, (data) => {
+      console.log("Did we set driver of car : ? -> " + driver_id + " - " + car_id);
+      console.log(data);
+   });
+}
+
 function StartRecording(driver_id){
    socket.emit("startrecording", { driver_id }, (data) => {
       console.log("Did we start recording : ? -> " + driver_id);

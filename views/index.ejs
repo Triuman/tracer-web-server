@@ -1,5 +1,424 @@
+<html><head>
+   <title>Tracer League</title>
+   <meta name="description" content="">
+   <meta name="keywords" content="">
+
+   <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=0">
+   <meta name="msapplication-TileColor" content="#40618f">
+   <meta name="msapplication-TileImage" content="mstile_144x144.png">
+   <meta name="format-detection" content="telephone=no">
+
+   <link rel="canonical" href="">
+
+<script src="/public/js/three.min.js"></script>
+<script src="/public/js/orbitControls.js"></script>
+<script src="/public/js/WebVR.js"></script>
 
 <script src="/socket.io/socket.io.js"></script>
 <script src="/public/js/tracerclient.js"></script>
 
-<video id="remoteView" width="640" height="480" autoplay></video>
+   <link href="/public/css/tether.min.css" rel="stylesheet">
+   <link href="/public/css/tether-theme-basic.min.css" rel="stylesheet">
+   <link href="/public/css/bootstrap.min.css" rel="stylesheet">
+   <link href="/public/css/font-awesome.min.css" rel="stylesheet">
+   <link href="/public/plugins/owl-carousel/css/owl.carousel.css" rel="stylesheet">
+   <link href="/public/plugins/social/assets/stylesheets/arthref.min.css" rel="stylesheet">
+   <link href="/public/css/style.css" rel="stylesheet">
+</head>
+
+<body>
+
+   <div class="header">
+       <div class="col-md-12">
+           <div class="row">
+               <div class="col-md-3">
+                   <div class="logo"><a href=""><img src="/public/images/logo.png" alt=""></a></div>
+               </div>
+               <div class="col-md-6">
+                   <div class="award">
+                       <ul>
+                           <li><span>1</span><i class="fa fa-trophy"></i></li>
+                           <li><span>1</span><i class="fa fa-trophy"></i></li>
+                           <li><span>1</span><i class="fa fa-trophy"></i></li>
+                       </ul>
+                   </div>
+               </div>
+               <div class="col-md-3">
+                   <div class="premium">
+                       <p class="premium-title">TRACER®Access </p>
+                       <div class="signed-out">
+                           <a href="javascript:void(0)" class="sign-in" data-toggle="modal" data-target="#modalLogin">Sign in</a> or <a href="#" data-toggle="modal" data-target="#modalRegister">REGISTER</a>
+                       </div>
+                   </div>
+                   <div class="dropdown profile">
+                       <button class="btn dropdown-toggle" type="button" id="dropdownMenuButton" data-toggle="dropdown">
+                           <div class="avatar"><img src="/public/images/user/20.jpg"></div>
+                           <div class="name">
+                               <h6>Recep YILDIZ</h6>
+                               <p><i class="fa fa-database fa-fw"></i>12 coin</p>
+                           </div>
+                       </button>
+                       <div class="dropdown-menu" aria-labelledby="dropdownMenuButton">
+                           <a class="dropdown-item" href="#">Profile</a>
+                           <a class="dropdown-item" href="#">Messages</a>
+                           <a class="dropdown-item" href="#">Sign Out</a>
+                       </div>
+                   </div>
+               </div>
+           </div>
+       </div>
+   </div>
+   <div>
+
+       <!-- Sidebar Left -->
+       <div class="sidebar-left">
+           <div class="sid2">
+               <div class="room-header"><h2>Room List</h2> <a href="javascript:void(0)" data-toggle="modal" data-target="#modalCreate">Create a Room</a></div>
+               <div class="room-unpin">
+                   <h1><span>7</span>Oda İsmi</h1>
+                   <div class="rm1">
+                       <h3>User-1</h3>
+                       <span class="online"></span>
+                       <div class="trophy">
+                           <ul>
+                               <li><em>1</em><i class="fa fa-trophy"></i></li>
+                               <li><em>1</em><i class="fa fa-trophy"></i></li>
+                               <li><em>1</em><i class="fa fa-trophy"></i></li>
+                           </ul>
+                       </div>
+                   </div>
+                   <div class="rm1">
+                       <h3>User-1</h3>
+                       <span class="online"></span>
+                       <div class="trophy">
+                           <ul>
+                               <li><em>1</em><i class="fa fa-trophy"></i></li>
+                               <li><em>1</em><i class="fa fa-trophy"></i></li>
+                               <li><em>1</em><i class="fa fa-trophy"></i></li>
+                           </ul>
+                       </div>
+                   </div>
+                   <div class="rm1">
+                       <h3>User-1</h3>
+                       <span class="offline"></span>
+                       <div class="trophy">
+                           <ul>
+                               <li><em>1</em><i class="fa fa-trophy"></i></li>
+                               <li><em>1</em><i class="fa fa-trophy"></i></li>
+                               <li><em>1</em><i class="fa fa-trophy"></i></li>
+                           </ul>
+                       </div>
+                   </div>
+                   <div class="rm1">
+                       <h3>User-1</h3>
+                       <span class="offline"></span>
+                       <div class="trophy">
+                           <ul>
+                               <li><em>1</em><i class="fa fa-trophy"></i></li>
+                               <li><em>1</em><i class="fa fa-trophy"></i></li>
+                               <li><em>1</em><i class="fa fa-trophy"></i></li>
+                           </ul>
+                       </div>
+                   </div>
+                   <div>
+                       <button class="btn btn-danger">Exit Room</button>
+                       <button class="btn btn-success">I'm Ready</button>
+                   </div>
+               </div>
+               <div class="room-line">
+                   <div class="rm1">1</div>
+                   <div class="rm2">
+                       <h3>Room-1</h3>
+                       <a href="" class="btn btn-warning">Join</a>
+                       <span>
+                           <i title="" data-toggle="tooltip" class="fa fa-car active" data-original-title="Active"></i>
+                           <i title="" data-toggle="tooltip" class="fa fa-car pause" data-original-title="Pause"></i>
+                           <i title="" data-toggle="tooltip" class="fa fa-car passive" data-original-title="Passive"></i>
+                           <i title="" data-toggle="tooltip" class="fa fa-car passive" data-original-title="Passive"></i>
+                       </span>
+                   </div>
+               </div>
+               <div class="room-line">
+                   <div class="rm1">2</div>
+                   <div class="rm2">
+                       <h3>Room-2</h3>
+                       <a href="" class="btn btn-warning">Join</a>
+                       <span>
+                           <i title="" data-toggle="tooltip" class="fa fa-car active" data-original-title="Active"></i>
+                           <i title="" data-toggle="tooltip" class="fa fa-car pause" data-original-title="Pause"></i>
+                           <i title="" data-toggle="tooltip" class="fa fa-car passive" data-original-title="Passive"></i>
+                           <i title="" data-toggle="tooltip" class="fa fa-car passive" data-original-title="Passive"></i>
+                       </span>
+                   </div>
+               </div>
+               <div class="room-line">
+                   <div class="rm1">3</div>
+                   <div class="rm2">
+                       <h3>Room-3</h3>
+                       <a href="" class="btn btn-warning">Join</a>
+                       <span>
+                           <i title="" data-toggle="tooltip" class="fa fa-car active" data-original-title="Active"></i>
+                           <i title="" data-toggle="tooltip" class="fa fa-car pause" data-original-title="Pause"></i>
+                           <i title="" data-toggle="tooltip" class="fa fa-car passive" data-original-title="Passive"></i>
+                           <i title="" data-toggle="tooltip" class="fa fa-car passive" data-original-title="Passive"></i>
+                       </span>
+                   </div>
+               </div>
+               <div class="room-line">
+                   <div class="rm1">4</div>
+                   <div class="rm2">
+                       <h3>Room-4</h3>
+                       <a href="" class="btn btn-warning">Join</a>
+                       <span>
+                           <i title="" data-toggle="tooltip" class="fa fa-car active" data-original-title="Active"></i>
+                           <i title="" data-toggle="tooltip" class="fa fa-car pause" data-original-title="Pause"></i>
+                           <i title="" data-toggle="tooltip" class="fa fa-car passive" data-original-title="Passive"></i>
+                           <i title="" data-toggle="tooltip" class="fa fa-car passive" data-original-title="Passive"></i>
+                       </span>
+                   </div>
+               </div>
+               <div class="room-line">
+                   <div class="rm1">5</div>
+                   <div class="rm2">
+                       <h3>Room-5</h3>
+                       <a href="" class="btn btn-warning">Join</a>
+                       <span>
+                           <i title="" data-toggle="tooltip" class="fa fa-car active" data-original-title="Active"></i>
+                           <i title="" data-toggle="tooltip" class="fa fa-car pause" data-original-title="Pause"></i>
+                           <i title="" data-toggle="tooltip" class="fa fa-car passive" data-original-title="Passive"></i>
+                           <i title="" data-toggle="tooltip" class="fa fa-car passive" data-original-title="Passive"></i>
+                       </span>
+                   </div>
+               </div>
+               <div class="room-line">
+                   <div class="rm1">6</div>
+                   <div class="rm2">
+                       <h3>Room-6</h3>
+                       <a href="" class="btn btn-warning">Join</a>
+                       <span>
+                           <i title="" data-toggle="tooltip" class="fa fa-car active" data-original-title="Active"></i>
+                           <i title="" data-toggle="tooltip" class="fa fa-car pause" data-original-title="Pause"></i>
+                           <i title="" data-toggle="tooltip" class="fa fa-car passive" data-original-title="Passive"></i>
+                           <i title="" data-toggle="tooltip" class="fa fa-car passive" data-original-title="Passive"></i>
+                       </span>
+                   </div>
+               </div>
+           </div>
+       </div>
+
+       <!-- Content -->
+       <div class="content">
+           <div class="content-nav">
+               <a href="javascript:void(0)" class="share-btn shareSelector"><i class="fa fa-share-alt fa-fw"></i>Share</a>
+           </div>
+           <div class="track-maps">
+               <div id="track" class="owl-carousel owl-theme" style="opacity: 1; display: block;">
+                   <div class="owl-wrapper-outer"><div class="owl-wrapper" style="width: 1080px; left: 0px; display: block; transition: all 1000ms ease; transform: translate3d(0px, 0px, 0px);"><div class="owl-item" style="width: 90px;"><a href=""><img src="/public/images/map1.jpg"><span>Harita-1</span></a></div><div class="owl-item" style="width: 90px;"><a href=""><img src="/public/images/map1.jpg"><span>Harita-2</span></a></div><div class="owl-item" style="width: 90px;"><a href=""><img src="/public/images/map1.jpg"><span>Harita-3</span></a></div><div class="owl-item" style="width: 90px;"><a href=""><img src="/public/images/map1.jpg"><span>Harita-4</span></a></div><div class="owl-item" style="width: 90px;"><a href=""><img src="/public/images/map1.jpg"><span>Harita-5</span></a></div><div class="owl-item" style="width: 90px;"><a href=""><img src="/public/images/map1.jpg"><span>Harita-6</span></a></div></div></div>
+                   
+                   
+                   
+                   
+                   
+               <div class="owl-controls clickable" style="display: none;"><div class="owl-pagination"><div class="owl-page active"><span class=""></span></div></div><div class="owl-buttons"><div class="owl-prev"></div><div class="owl-next"></div></div></div></div>
+           </div>
+           <div class="video-player">
+               <div class="video-camera">
+                   <span>View</span>
+                   <select>
+                       <option>Camera 1</option>
+                       <option>Camera 2</option>
+                       <option>Camera 3</option>
+                   </select>
+               </div>
+               
+               <video id="remoteViewLeft" width="640" height="480" autoplay></video>
+               <video id="remoteViewRight" width="640" height="480" autoplay></video>
+               <iframe src="https://www.youtube.com/embed/ZdP1qP8nfII" frameborder="0" gesture="media" allow="encrypted-media" allowfullscreen=""></iframe>
+           </div>
+       </div>
+
+       <!-- Sidebar Right -->
+       <div class="sidebar-right">
+           <div class="chat">
+               <div class="chat-tab">
+                   <ul>
+                       <li class="active"><a href="">Genel</a></li>
+                       <li><a href="">Oda XX</a></li>
+                   </ul>
+               </div>
+               <div class="chat-content">
+                   <div class="chat-line"><a href="">@Alaxandar66:</a><span>Does anyone know how to sub for free? Is it true I can get a free trial for Twitch Prime and sub to my favorite streamer? </span></div>
+               </div>
+               <div class="chat-box">
+                   <textarea placeholder="Bir mesaj gönderin"></textarea>
+                   <button class="btn btn-primary"><i class="fa fa-paper-plane-o"></i></button>
+               </div>
+           </div>
+       </div>
+   </div>
+
+   <!-- Register Popup -->
+   <div class="register-popup">
+       <div class="container">
+           <a href="javascript:void(0)" class="hide-popup"><i class="fa fa-close"></i></a>
+           <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit.</p>
+           <button class="btn btn-success">Start the Race</button>
+       </div>
+   </div>
+   
+   <!-- Login -->
+   <div class="modal fade" id="modalLogin" tabindex="-1">
+       <div class="modal-dialog" role="document">
+           <div class="modal-content">
+               <div class="modal-header">
+                   <h5 class="modal-title">Login</h5>
+                   <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                       <span aria-hidden="true">×</span>
+                   </button>
+               </div>
+               <div class="modal-body">
+                   <div>
+                       <div class="form-group">
+                           <label for="txLoginEmail" class="form-control-label">Email</label>
+                           <input type="text" class="form-control" id="txLoginEmail">
+                       </div>
+                       <div class="form-group">
+                           <label for="txLoginPass" class="form-control-label">Password</label>
+                           <input type="text" class="form-control" id="txLoginPass">
+                       </div>
+                       <button type="button" id="btnLogin" class="btn btn-primary">Login</button>
+
+                   </div>
+               </div>
+               <div class="modal-footer">
+                   Don't have an account yet?
+                   <a href="">Subscribe to Tracer® Access</a>
+               </div>
+           </div>
+       </div>
+   </div>
+   
+   <!-- Register -->
+   <div class="modal fade" id="modalRegister" tabindex="-1">
+       <div class="modal-dialog" role="document">
+           <div class="modal-content">
+               <div class="modal-header">
+                   <h5 class="modal-title">Register</h5>
+                   <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                       <span aria-hidden="true">×</span>
+                   </button>
+               </div>
+               <div class="modal-body">
+                   <div>
+                       <div class="form-group">
+                           <label for="txLoginEmail" class="form-control-label">Username</label>
+                           <input type="text" class="form-control" id="txLoginEmail">
+                       </div>
+                       <div class="form-group">
+                           <label for="txLoginPass" class="form-control-label">Password</label>
+                           <input type="text" class="form-control" id="txLoginPass">
+                       </div>
+                       <div class="form-group">
+                           <label for="txLoginEmail" class="form-control-label">Email Adres</label>
+                           <input type="text" class="form-control" id="txLoginEmail">
+                       </div>
+                       <button type="button" class="btn btn-facebook"><i class="fa fa-facebook-f fa-fw"></i>Facebook</button>
+                       <button type="button" class="btn btn-plus"><i class="fa fa-google-plus fa-fw"></i>Google Plus</button>
+                       <button type="button" class="btn btn-primary">Register</button>
+
+                   </div>
+               </div>
+               <div class="modal-footer">
+                   Don't have an account yet?
+                   <a href="">Subscribe to Tracer® Access</a>
+               </div>
+           </div>
+       </div>
+   </div>
+   
+   <!-- Create Room -->
+   <div class="modal fade" id="modalCreate" tabindex="-1">
+       <div class="modal-dialog" role="document">
+           <div class="modal-content">
+               <div class="modal-header">
+                   <h5 class="modal-title">Create Room</h5>
+                   <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                       <span aria-hidden="true">×</span>
+                   </button>
+               </div>
+               <div class="modal-body">
+                   <div>
+                       <div class="form-group">
+                           <label for="txLoginEmail" class="form-control-label">Driver Count</label>
+                           <div>
+                               <span>2</span><input type="radio" name="txLoginEmail">
+                               <span>3</span><input type="radio" name="txLoginEmail">
+                               <span>4</span><input type="radio" name="txLoginEmail">
+                           </div>
+                       </div>
+                       <div class="form-group">
+                           <label for="txLoginPass" class="form-control-label">Room Password</label>
+                           <input type="text" class="form-control" id="txLoginPass">
+                       </div>
+                       <button type="button" id="btnLogin" class="btn btn-primary">Create Room</button>
+
+                   </div>
+               </div>
+           </div>
+       </div>
+   </div>
+
+
+   <script src="/public/js/jquery.min.js"></script>
+   <script src="/public/js/tether.min.js"></script>
+   <script src="/public/js/bootstrap.min.js"></script>
+   <script src="/public/plugins/owl-carousel/js/owl.carousel.min.js"></script>
+   <script src="/public/plugins/social/assets/javascripts/socialShare.min.js"></script>
+
+   <script src="/public/js/main.js"></script>
+   <script>
+       $(document).ready(function () {
+           $('#sidebarCollapse').on('click', function () {
+               $('#sidebar').toggleClass('active');
+           });
+
+           $('#btnLogin').on('click', function () {
+               $('.premium').hide();
+               $('.profile').show();
+               $('#modalLogin').modal('hide');
+           });
+
+           $('.shareSelector').socialShare({
+               social: 'facebook,twitter,google,pinterest,linkedin',
+               whenSelect: true,
+               animation: 'launchpadReverse',
+               selectContainer: '.shareSelector',
+               blur: true
+           });
+
+           $("#track").owlCarousel({
+               items: 6,
+               autoPlay: 5000,
+               itemsDesktop: [1199, 6],
+               itemsDesktopSmall: [979, 2],
+               itemsTablet: [768, 2],
+               itemsMobile: [479, 2],
+               responsive: true,
+               pagination: true,
+               navigationText: ["", ""],
+               navigation: true
+           });
+
+           $('.hide-popup').on('click', function () {
+               $('.register-popup').hide();
+           });
+       });
+
+
+
+   </script>
+
+
+
+
+</body></html>
