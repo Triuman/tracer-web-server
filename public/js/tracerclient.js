@@ -45,14 +45,14 @@ const UpdateTypes = {
 
 var driver = null; //This is DriverPrivateModel
 var my_room_view = null;
-var roomList = {}; //This has rooms with their uuids. uuid: { room_view, DOM }
-var track_id = null; //We should set this when we get a snapshot.
+var trackList = {};
+var activeTrack = null;
 
-var RoomItem = function(room_view){
+var RoomItem = function(room_public_view){
       var _that = this;
 
       this.domElements = null;
-      this.room_view = null;
+      this.room_public_view = null;
 
       function CreateDomElements(){
             // <div class="room-line">
@@ -133,13 +133,13 @@ var RoomItem = function(room_view){
             }
       };
 
-      this.setRoomView = function(room_view){
+      this.setRoomView = function(room_public_view){
             if(!this.domElements)
                   CreateDomElements();
                   
-            this.room_view = room_view;
+            this.room_public_view = room_public_view;
 
-            // var room_view = {
+            // var room_public_view = {
             //       uuid: room.uuid,
             //       name: room.name,
             //       status: room.status,
@@ -147,32 +147,32 @@ var RoomItem = function(room_view){
             //       is_locked: room.password != null && room.password != ""
             // };
       
-            $(this.domElements.room_name).text(room_view.name);
+            $(this.domElements.room_name).text(room_public_view.name);
 
-            console.log(this.domElements.join_button);
-            //unbind due to multiple calls to setRoomView function.
-            this.domElements.join_button.addEventListener("click", function(){ JoinRoom(room_view.uuid); });
-            //$(this.domElements.join_button).one("click", function(){ JoinRoom(room_view.uuid); });
+            $(this.domElements.join_button).attr('onClick','JoinRoom("' + room_public_view.uuid + '")');
+            //this.domElements.join_button.addEventListener("click", function(){ JoinRoom(room_public_view.uuid); });
+            //$(this.domElements.join_button).on("click", function(){ JoinRoom(room_public_view.uuid); });
             
-            this.setDriverCount(room_view.driver_count);
+            this.setDriverCount(room_public_view.driver_count);
       
       };
-      if(room_view)
-            this.setRoomView(room_view);
+      if(room_public_view)
+            this.setRoomView(room_public_view);
 
       return this;
 };
 
 function SetRoomNumbers(){
+      var roomList = activeTrack.rooms;
       var roomDomContainerListInOrder = [];
       for(var r1 in roomList){
             var number = 1;
             for(var r2 in roomList){
-                  if(roomList[r1].room_view.create_date > roomList[r2].room_view.create_date)
+                  if(roomList[r1].room_public_view.create_date > roomList[r2].room_public_view.create_date)
                         number++;
             }
             roomList[r1].setRoomNumber(number);
-            if(my_room_view && roomList[r1].room_view.uuid == my_room_view.uuid){
+            if(my_room_view && roomList[r1].room_public_view.uuid == my_room_view.uuid){
                   //this is our room. Set its number too.
                   $("#divRoomNumber").text(number);
             }
@@ -187,25 +187,24 @@ function SetRoomNumbers(){
 }
 
 function hideJoinButtons(){
-      for(var r in roomList){
-            $(roomList[r].domElements.join_button).hide();
+      for(var r in activeTrack.rooms){
+            $(activeTrack.rooms[r].domElements.join_button).hide();
       }
 }
 function showJoinButtons(){
-      for(var r in roomList){
-            $(roomList[r].domElements.join_button).show();
+      for(var r in activeTrack.rooms){
+            $(activeTrack.rooms[r].domElements.join_button).show();
       }
 }
 
-function onNewRoomView(room_view){
-      if(roomList[room_view.uuid]){
-            roomList[room_view.uuid].setRoomView(room_view);
+function onNewRoomView(room_public_view){
+      if(trackList[room_public_view.track_id].rooms[room_public_view.uuid]){
+            trackList[room_public_view.track_id].rooms[room_public_view.uuid].setRoomView(room_public_view);
       }else{
-            var newRoom = new RoomItem(room_view);
-            $("#divRoomList").append(newRoom.domElements.container);
-            roomList[newRoom.room_view.uuid] = newRoom;
+            var newRoom = new RoomItem(room_public_view);
+            trackList[room_public_view.track_id].rooms[newRoom.room_public_view.uuid] = newRoom;
       }
-      SetRoomNumbers();
+      return trackList[room_public_view.track_id].rooms[room_public_view.uuid];
 }
 
 var socket;
@@ -224,21 +223,59 @@ function StartSocket() {
             console.log("Socket disconnected");
       });
 
+
+      socket.on('authenticate', (data) => {
+            onAuthenticate(data);
+      });
+      
       socket.on('snapshot', (data) => {
             console.log("Got a snapshot -> ");
             console.log(data);
-            for(var t_id in data)
-                  track_id = t_id;
+            trackList = {};
+            activeTrack = null;
+            for(var track_id in data){
+                  trackList[track_id] = {
+                        uuid: track_id,
+                        rooms: {}
+                  };
+                  for(var r in data[track_id].rooms){
+                        trackList[track_id].rooms[r] = onNewRoomView(data[track_id].rooms[r]);
+                  }
+                  trackList[track_id].chat = data[track_id].chat;
 
-            for(var r in data[track_id].rooms){
-                  onNewRoomView(data[track_id].rooms[r]);
+                  //Set the first one as active track.
+                  if(!activeTrack)
+                        changeActiveTrack(track_id);
             }
+            
       });
+
+      function changeActiveTrack(track_id){
+            if(activeTrack && track_id == activeTrack.uuid)
+                  return;
+
+            activeTrack = trackList[track_id];
+
+            $("#divRoomList").empty();
+            for(var r in activeTrack.rooms){
+                  $("#divRoomList").append(activeTrack.rooms[r].domElements.container);
+            }
+            SetRoomNumbers();
+
+            //Empty chat area first.
+            $('#divGlobalChat').empty();
+            //Show Global Chat
+            for(var c=0;c<activeTrack.chat.length;c++){
+                  var chatContent = '<div class="chat-line"><a href="javascript:void(0)">@' + activeTrack.chat[c].username + ':</a><span>' + activeTrack.chat[c].text + '</span></div>';
+                  $("#divGlobalChat").append(chatContent);
+            }
+            setChatAreaHeight();
+      }
 
       socket.on('room-snapshot', (data) => {
             console.log("Got a room snapshot -> ");
             console.log(data);
-            ProcessRoomSnapshot(data.room_view);
+            ProcessRoomSnapshot(data.room_private_view);
       });
 
       
@@ -257,13 +294,17 @@ function StartSocket() {
             RoomUpdateHandler[update.type](update.data);
       });
 
+      function requestNewSnapshot(){
+            socket.emit("getsnapshot");
+      }
+
       function requestNewRoomSnapshot(){
             socket.emit("room-snapshot", {}, function (data) {
                   if (data.success) {
-                        ProcessRoomSnapshot(data.room_view);
+                        ProcessRoomSnapshot(data.room_private_view);
                   } else {
                         my_room_view = null;
-                        $('#divRoom').hide();
+                        SwitchToNoInRoomView();
                         console.log("Error while getting room snapshot.");
                         switch (data.reason) {
                               case Enum_Callback_Reason.NOT_LOGGED_IN:
@@ -289,12 +330,12 @@ function StartSocket() {
                               case Enum_Callback_Reason.NOT_LOGGED_IN:
                                     console.log("Reason.NOT_LOGGED_IN");
                                     my_room_view = null;
-                                    $('#divRoom').hide();
+                                    SwitchToNoInRoomView();
                                     break;
                               case Enum_Callback_Reason.DRIVER_IS_NOT_IN_A_ROOM:
                                     console.log("Reason.DRIVER_IS_NOT_IN_A_ROOM");
                                     my_room_view = null;
-                                    $('#divRoom').hide();
+                                    SwitchToNoInRoomView();
                                     break;
                         }
                   }
@@ -392,8 +433,10 @@ function StartSocket() {
             my_room_view.admin_id = data.driver_id;
             if(driver.uuid == my_room_view.admin_id){
                   //TODO: Show some menus to remove drivers from the room.
+                  console.log("I am now Admin!");
             }else{
                   //TODO: Hide those menus.
+                  console.log("Admin is changed. But it is not me.");
             }
       };
       RoomUpdateHandler[UpdateTypes.ROOM_CHAT] = function (data) {
@@ -403,6 +446,15 @@ function StartSocket() {
                   requestNewRoomSnapshot();
                   return;
             }
+
+            my_room_view.chat.push(data);
+
+            if(data.username == driver.username)
+                  return;
+
+            var chatContent = '<div class="chat-line"><a href="javascript:void(0)">@' + data.username + ':</a><span>' + data.text + '</span></div>';
+            $("#divRoomChat").append(chatContent);
+            setChatAreaHeight();
       };
 
       //TODO: If you cannot find a track or room or driver with the given id on updates, there is an inconsistency. So, request a new snapshot from the Web Server to catch up.
@@ -415,24 +467,36 @@ function StartSocket() {
       var UpdateHandler = {};
       UpdateHandler[UpdateTypes.ROOM_CREATED] = function (data) {
             //append room to the track's room list
-            //data = { track_id, room_view, admin_id }
-            onNewRoomView(data.room_view);
+            //data = { track_id, room_public_view }
+            if(!trackList[data.room_public_view.track_id]){
+                  requestNewSnapshot();
+                  return;
+            }
+            var roomItem = onNewRoomView(data.room_public_view);
+            trackList[data.room_public_view.track_id].rooms[data.room_public_view.uuid] = roomItem;
+            if(activeTrack.uuid == data.room_public_view.track_id){
+                  $("#divRoomList").append(roomItem.domElements.container);
+                  SetRoomNumbers();
+            }
       };
       UpdateHandler[UpdateTypes.ROOM_CLOSED] = function (data) {
             //remove room from its track's room list
             //data: { room_id }
-            var room = roomList[data.room_id];
+            var room = trackList[data.track_id].rooms[data.room_id];
             if(room){
-                  delete roomList[data.room_id];
-                  $(room.domElements.container).remove();
-                  SetRoomNumbers();
+                  delete  trackList[data.track_id].rooms[data.room_id];
+                  if(activeTrack.uuid == data.track_id){
+                        $(room.domElements.container).remove();
+                        SetRoomNumbers();
+                  }
             }
       };
       UpdateHandler[UpdateTypes.ROOM_ENTERED_RACE] = function (data) {
             //remove room from its track's room list and show it over the camera stream.
             //data: { room: Snapshot[track_id].room_in_race }
-            /* room_in_race: {
-                  uuid: ""
+            /* room: {
+                  uuid: "",
+                  track_id,
                   drivers: {
                      "driveruuid1": {
                         username: driver.username
@@ -441,8 +505,8 @@ function StartSocket() {
                   ranking: ["driver_uuid1", "driver_uuid2", "driver_uuid3", "driver_uuid4"]
                } */
 
-               $(roomList[data.room.uuid].domElements.container).remove();
-               delete roomList[data.room.uuid];
+               $(trackList[data.room.track_id].rooms[data.room.uuid].domElements.container).remove();
+               delete trackList[data.room.track_id].rooms[data.room.uuid];
                SetRoomNumbers();
       };
       UpdateHandler[UpdateTypes.ROOM_FINISHED_RACE] = function (data) {
@@ -451,40 +515,46 @@ function StartSocket() {
       };
       UpdateHandler[UpdateTypes.DRIVER_JOINED_ROOM] = function (data) {
             //set room driver count text
-            //data: { room_id, driver_count }
-            roomList[data.room_id].setDriverCount(data.driver_count);
+            //data: { track_id, room_id, driver_count }
+            trackList[data.track_id].rooms[data.room_id].setDriverCount(data.driver_count);
       };
       UpdateHandler[UpdateTypes.DRIVER_LEFT_ROOM] = function (data) {
             //set room driver count text
-            //data: { room_id, driver_count }
-            roomList[data.room_id].setDriverCount(data.driver_count);
+            //data: { track_id, room_id, driver_count }
+            trackList[data.track_id].rooms[data.room_id].setDriverCount(data.driver_count);
       };
       //These four updates will call the same function.
       UpdateHandler[UpdateTypes.DRIVER_GOT_ONLINE] = function (data) {
             //Update room car slot colors with the room_view.
-            //data: { room_id, driver_count }
-            roomList[data.room_id].setDriverCount(data.driver_count);
+            //data: { track_id, room_id, driver_count }
+            trackList[data.track_id].rooms[data.room_id].setDriverCount(data.driver_count);
       };
       UpdateHandler[UpdateTypes.DRIVER_GOT_OFFLINE] = function (data) {
             //Update room car slot colors with the room_view.
-            //data: { room_id, driver_count }
-            roomList[data.room_id].setDriverCount(data.driver_count);
+            //data: { track_id, room_id, driver_count }
+            trackList[data.track_id].rooms[data.room_id].setDriverCount(data.driver_count);
       };
       UpdateHandler[UpdateTypes.DRIVER_IS_READY] = function (data) {
             //Update room car slot colors with the room_view.
-            //data: { room_id, driver_count }
-            roomList[data.room_id].setDriverCount(data.driver_count);
+            //data: { track_id, room_id, driver_count }
+            trackList[data.track_id].rooms[data.room_id].setDriverCount(data.driver_count);
       };
       UpdateHandler[UpdateTypes.DRIVER_IS_NOT_READY] = function (data) {
             //Update room car slot colors with the room_view.
-            //data: { room_id, driver_count }
-            roomList[data.room_id].setDriverCount(data.driver_count);
+            //data: { track_id, room_id, driver_count }
+            trackList[data.track_id].rooms[data.room_id].setDriverCount(data.driver_count);
       };
       UpdateHandler[UpdateTypes.GLOBAL_CHAT] = function (data) {
             console.log("Global chat ->");
             console.log(data);
-            if (data.track_id && data.chat) {
-                  //TODO: Append new chat to the track with track_id
+            if (data.track_id && data.username && data.text) {
+                  trackList[data.track_id].chat.push({username: data.username, text: data.text});
+                  if(activeTrack.uuid != data.track_id || driver.username == data.username)
+                        return;
+                  //Append new chat to the track with track_id
+                  var chatContent = '<div class="chat-line"><a href="javascript:void(0)">@' + data.username + ':</a><span>' + data.text + '</span></div>';
+                  $("#divGlobalChat").append(chatContent);
+                  setChatAreaHeight();
             }
       };
 
@@ -507,7 +577,7 @@ function AddButtonEvents(){
       });
 
       $('#btnCreateRoom').on('click', function () {
-            CreateRoom($('#txtRoomName').val(), $('#txtRoomPassword').val(), track_id);
+            CreateRoom($('#txtRoomName').val(), $('#txtRoomPassword').val(), activeTrack.uuid);
             $('#modalCreateRoom').modal('hide');
       });
 
@@ -523,10 +593,66 @@ function AddButtonEvents(){
       $('#btnReady').on('click', function () {
             SetReady();
       });
+
+      $('#btnGlobalChat').on('click', function () {
+            $('#btnGlobalChat').removeClass().addClass("active");
+            $('#btnRoomChat').removeClass();
+            $('#divGlobalChat').show();
+            $('#divRoomChat').hide();
+            setChatAreaHeight();
+      });
+
+      $('#btnRoomChat').on('click', function () {
+            $('#btnGlobalChat').removeClass();
+            $('#btnRoomChat').removeClass().addClass("active");
+            $('#divGlobalChat').hide();
+            $('#divRoomChat').show();
+            setChatAreaHeight();
+      });
+      
+      $('#btnSendChat').on('click', function () {
+            var text = $('#txtChat').val();
+            if(!driver || text == "")
+                  return;
+            if($('#btnGlobalChat').attr('class') == "active"){
+                  activeTrack.chat.push({ username: driver.username, text });
+                  var chatContent = '<div class="chat-line"><a href="javascript:void(0)">@' + driver.username + ':</a><span>' + text + '</span></div>';
+                  $("#divGlobalChat").append(chatContent);
+                  SendGlobalChat(text);
+            }else{
+                  if(!my_room_view)
+                        return;
+                  my_room_view.chat.push({ username: driver.username, text });
+                  var chatContent = '<div class="chat-line"><a href="javascript:void(0)">@' + driver.username + ':</a><span>' + text + '</span></div>';
+                  $("#divRoomChat").append(chatContent);
+                  SendRoomChat(text);
+            }
+            $('#txtChat').val("");
+            $("#txtChat").trigger("input");
+            setChatAreaHeight();
+      });
+
+      $('#txtChat').on('input', function () {
+            this.style.height = 'auto';
+            this.style.height = (this.scrollHeight) + 'px';
+            setChatAreaHeight();
+      });
+
+      $(window).resize(function() {
+            setChatAreaHeight();
+      });
+
 }
 
-function ProcessRoomSnapshot(room_view){
-      /* room_view = {
+function setChatAreaHeight(){
+      $("#divGlobalChat").height($(window).height() - $("#divChatTextArea").height() - 190);
+      $("#divGlobalChat").scrollTop(9999999);
+      $("#divRoomChat").height($(window).height() - $("#divChatTextArea").height() - 190);
+      $("#divRoomChat").scrollTop(9999999);
+}
+
+function ProcessRoomSnapshot(room_private_view){
+      /* room_private_view = {
             uuid: room.uuid,
             name: room.name,
             status: room.status,
@@ -544,26 +670,25 @@ function ProcessRoomSnapshot(room_view){
 
       hideJoinButtons();
 
-      my_room_view = room_view;
+      my_room_view = room_private_view;
 
-      if(roomList[my_room_view.uuid]){
-            var number = $(roomList[my_room_view.uuid].domElements.room_number).text();
-            console.log(number);
+      if(trackList[my_room_view.track_id].rooms[my_room_view.uuid]){
+            var number = $(trackList[my_room_view.track_id].rooms[my_room_view.uuid].domElements.room_number).text();
             $("#divRoomNumber").text(number);
       }else{
             //Our room must be in race. So dont show any room number.
             $("#divRoomNumber").text("");
       }
 
-      $('#divRoomName').text(room_view.name);
+      $('#divRoomName').text(my_room_view.name);
       var driver_no = 0;
-      for(var driver_uuid in room_view.drivers){
+      for(var driver_uuid in my_room_view.drivers){
             driver_no++;
-            $('#divDriverUsername' + driver_no).text(room_view.drivers[driver_uuid].username);
-            $('#divDriverRoomStatus' + driver_no).removeClass().addClass(room_view.drivers[driver_uuid].status == Enum_Driver_Room_Status.OFFLINE ? "offline" : room_view.drivers[driver_uuid].status == Enum_Driver_Room_Status.READY ? "ready" : "not-ready");
-            $('#divDriverBronzTrophy' + driver_no).text(room_view.drivers[driver_uuid].bronze_medal);
-            $('#divDriverSilverTrophy' + driver_no).text(room_view.drivers[driver_uuid].silver_medal);
-            $('#divDriverGoldTrophy' + driver_no).text(room_view.drivers[driver_uuid].gold_medal);
+            $('#divDriverUsername' + driver_no).text(my_room_view.drivers[driver_uuid].username);
+            $('#divDriverRoomStatus' + driver_no).removeClass().addClass(my_room_view.drivers[driver_uuid].status == Enum_Driver_Room_Status.OFFLINE ? "offline" : my_room_view.drivers[driver_uuid].status == Enum_Driver_Room_Status.READY ? "ready" : "not-ready");
+            $('#divDriverBronzTrophy' + driver_no).text(my_room_view.drivers[driver_uuid].bronze_medal);
+            $('#divDriverSilverTrophy' + driver_no).text(my_room_view.drivers[driver_uuid].silver_medal);
+            $('#divDriverGoldTrophy' + driver_no).text(my_room_view.drivers[driver_uuid].gold_medal);
             $('#divDriverTrophy' + driver_no).css('visibility', 'visible');
       }
       for(var i=driver_no+1;i<=4;i++){
@@ -578,6 +703,22 @@ function ProcessRoomSnapshot(room_view){
       }
       $('#divRoom').show();
 
+      //Empty chat area first.
+      $('#divRoomChat').empty();
+      //Show Room Chat
+      for(var c=0;c<my_room_view.chat.length;c++){
+            var chatContent = '<div class="chat-line"><a href="javascript:void(0)">@' + my_room_view.chat[c].username + ':</a><span>' + my_room_view.chat[c].text + '</span></div>';
+            $("#divRoomChat").append(chatContent);
+      }
+      setChatAreaHeight();
+      
+      if(driver.uuid == my_room_view.admin_id){
+            //TODO: Show some menus to remove drivers from the room.
+            console.log("I am now Admin!");
+      }else{
+            //TODO: Hide those menus.
+            console.log("Admin is changed. But it is not me.");
+      }
 }
 
 function SetReady() {
@@ -605,6 +746,7 @@ function SetReady() {
             });
       }
 }
+
 
 function Register(u, p, e) {
       socket.emit("register", { username: u, password: p, email: e }, (data) => {
@@ -650,6 +792,8 @@ function Logout() {
                   }
             }
       });
+      driver = null;
+      my_room_view = null;
       localStorage.removeItem("token"); //Even if log out fails, we log out from here anyways.
       //TODO: And do some other stuff.
       SwitchToLoggedOutView();
@@ -660,11 +804,57 @@ function Authenticate(u, p) {
             console.log("We are using token authentication. ->");
             console.log(u);
             socket.emit("authenticate", { token: u }, (data) => {
-                  onAuthenticate(data);
+                  console.log("Authentication response -> ");
+                  console.log(data);
+                  if (!data.success) {
+                        //remove token from the local storage
+                        localStorage.removeItem("token");
+                        //TODO: Check different reasons and do something about it.
+                        switch (data.reason) {
+                              case Enum_Callback_Reason.ALREADY_LOGGED_IN:
+                                    console.log("ALREADY_LOGGED_IN");
+                                    break;
+                              case Enum_Callback_Reason.DB_ERROR:
+                                    console.log("DB_ERROR");
+                                    break;
+                              case Enum_Callback_Reason.TOKEN_EXPIRED:
+                                    console.log("TOKEN_EXPIRED");
+                                    break;
+                              case Enum_Callback_Reason.WRONG_CREDENTIALS:
+                                    console.log("WRONG_CREDENTIALS");
+                                    break;
+                              case Enum_Callback_Reason.MISSING_INFO:
+                                    console.log("MISSING_INFO");
+                                    break;
+                        }
+                  }
             });
       } else {
             socket.emit("authenticate", { username: u, password: p }, (data) => {
-                  onAuthenticate(data);
+                  console.log("Authentication response -> ");
+                  console.log(data);
+                  if (!data.success) {
+                        //remove token from the local storage
+                        localStorage.removeItem("token");
+                        //TODO: Check different reasons and do something about it.
+                        switch (data.reason) {
+                              case Enum_Callback_Reason.ALREADY_LOGGED_IN:
+                                    console.log("ALREADY_LOGGED_IN");
+                                    break;
+                              case Enum_Callback_Reason.DB_ERROR:
+                                    console.log("DB_ERROR");
+                                    break;
+                              case Enum_Callback_Reason.TOKEN_EXPIRED:
+                                    console.log("TOKEN_EXPIRED");
+                                    break;
+                              case Enum_Callback_Reason.WRONG_CREDENTIALS:
+                                    console.log("WRONG_CREDENTIALS");
+                                    break;
+                              case Enum_Callback_Reason.MISSING_INFO:
+                                    console.log("MISSING_INFO");
+                                    break;
+                        }
+                  }
             });
       }
 }
@@ -686,41 +876,26 @@ function SwitchToLoggedOutView(){
       $('.premium').show();
       $('.profile').hide();
       $('#divTrophy').hide();
+      SwitchToNoInRoomView();
+}
+
+
+function SwitchToNoInRoomView(){
       $('#divRoom').hide();
+      $('#divRoomChat').empty();
+      setChatAreaHeight();
+      showJoinButtons();
 }
 
 function onAuthenticate(data) {
       console.log("Are we authenticated? -> ");
       console.log(data);
-      if (data.success) {
-            driver = data.driver;
-            localStorage.setItem("token", data.token);
-            UpdateDriverView(driver);
-            if(!driver.in_room){
-                  $('#divRoom').hide();
-                  room_view = null;
-            }
-      } else {
-            //remove token from the local storage
-            localStorage.removeItem("token");
-            //TODO: Check different reasons and do something about it.
-            switch (data.reason) {
-                  case Enum_Callback_Reason.ALREADY_LOGGED_IN:
-                        console.log("ALREADY_LOGGED_IN");
-                        break;
-                  case Enum_Callback_Reason.DB_ERROR:
-                        console.log("DB_ERROR");
-                        break;
-                  case Enum_Callback_Reason.TOKEN_EXPIRED:
-                        console.log("TOKEN_EXPIRED");
-                        break;
-                  case Enum_Callback_Reason.WRONG_CREDENTIALS:
-                        console.log("WRONG_CREDENTIALS");
-                        break;
-                  case Enum_Callback_Reason.MISSING_INFO:
-                        console.log("MISSING_INFO");
-                        break;
-            }
+      driver = data.driver;
+      localStorage.setItem("token", data.token);
+      UpdateDriverView(driver);
+      if(!driver.in_room){
+            my_room_view = null;
+            SwitchToNoInRoomView();
       }
 }
 
@@ -734,13 +909,17 @@ function CreateRoom(name, password, track_id) {
                               break;
                   }
             }else{
-                  ProcessRoomSnapshot(data.room_view);
+                  ProcessRoomSnapshot(data.room_private_view);
             }
       });
 }
 
 
 function JoinRoom(room_id) {
+      if(!driver){
+            alert("Sign in to join rooms.");
+            return;
+      }
       socket.emit("join-room", { room_id }, (data) => {
             console.log("Did we join to the room? -> ");
             console.log(data);
@@ -750,7 +929,7 @@ function JoinRoom(room_id) {
                               break;
                   }
             }else{
-                  ProcessRoomSnapshot(data.room_view);
+                  ProcessRoomSnapshot(data.room_private_view);
             }
       });
 }
@@ -763,14 +942,14 @@ function LeaveRoom() {
                   console.log("We have a problem.");
             }else{
                   //Hide room view.
-                  $('#divRoom').hide();
-                  showJoinButtons();
+                  my_room_view = null;
+                  SwitchToNoInRoomView();
             }
       });
 }
 
-function SendRoomChat(chat) {
-      socket.emit("room-chat", { chat }, (data) => {
+function SendRoomChat(text) {
+      socket.emit("room-chat", { text }, (data) => {
             console.log("Did we send chat to the room? -> ");
             console.log(data);
             if (data.success == false) {
@@ -782,8 +961,8 @@ function SendRoomChat(chat) {
       });
 }
 
-function SendGlobalChat(track_id, chat) {
-      socket.emit("global-chat", { track_id, chat }, (data) => {
+function SendGlobalChat(text) {
+      socket.emit("global-chat", { track_id: activeTrack.uuid, text }, (data) => {
             console.log("Did we send chat to everyone? -> ");
             console.log(data);
             if (data.success == false) {

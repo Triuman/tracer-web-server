@@ -164,12 +164,12 @@ input[type=radio]:checked:before { display: inline-block; font-family: FontAweso
 .chat-tab ul li a { display: block;width: 100%;text-align: center;color: #333;height: 36px;line-height: 36px;  background: #fff;border-bottom: 1px solid #e7e9eb;}
 .chat-tab ul li.active a { font-weight: 600; background: #eef5f9; border-bottom: 1px solid #eef5f9;}
 
-.chat-content { padding: 20px 0; height: 100%;}
+.chat-content { padding: 20px 0; height: 100%; overflow-y: scroll;}
 .chat-content .chat-line { position: relative;font-size: 12px; padding: 8px 10px;line-height: 1.4; word-wrap: break-word;clear: both; }
 .chat-content .chat-line a { font-weight: bold;display: inline-block;padding-right: 5px;color: #0275d8; }
 
 .chat-box { position: fixed;bottom: 0;right: 0;width: 339px;padding: 30px 15px; background: #fff;overflow: hidden; }
-.chat-box textarea {float: left; width: calc(100% - 70px);  padding: 10px 0 10px 20px;height: 40px;border: 0; border-radius: 30px;     box-shadow: 0 2px 2px 0 rgba(227,236,247,.14), 0 3px 1px -2px rgba(227,236,247,.2), 0 1px 5px 0 rgba(227,236,247,.12); background: #EEF5F9; line-height: 1.5; color: #433f4a;}
+.chat-box textarea {float: left; width: calc(100% - 70px);  padding: 12px 18px 12px 18px;height: 45px;max-height: 300px;resize:none;border: 0; border-radius: 30px;     box-shadow: 0 2px 2px 0 rgba(227,236,247,.14), 0 3px 1px -2px rgba(227,236,247,.2), 0 1px 5px 0 rgba(227,236,247,.12); background: #EEF5F9; line-height: 1.5; color: #433f4a;}
 .chat-box .btn { float: right;border-radius: 30px; }
 
 

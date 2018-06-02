@@ -22,7 +22,6 @@ const DriverTimeouts = {}; //Put timeouts by driver id. When a driver disconnect
 const ActiveAdmins = {};
 
 const Snapshot = {}; //Keep Tracks, rooms and cars in it.
-const PublicRoomSnapshots = {}; //Keep same room objects in Snapshot with their room uuids to reach easily.
 const PrivateRoomSnapshots = {}; //These have detailed info about the room and will be send to a driver who is in the room when reconnect.
 /*
 PrivateRoomSnapshots = {
@@ -38,7 +37,8 @@ PrivateRoomSnapshots = {
             silver_medal: driver.silver_medal,
             gold_medal: driver.gold_medal
          }
-      }
+      },
+      chat: [{username: "", text: ""}]
    }
 };
 */
@@ -47,8 +47,10 @@ Snapshot:
 {
    uuid: "trackid1",
    name: "",
+   chat: [{ username, text }]
    room_in_race: {
-      uuid: ""
+      uuid: "",
+      track_id,
       drivers: {
          "driveruuid1": {
             username: driver.username
@@ -142,7 +144,8 @@ module.exports.start = function (httpServer) {
                         Tracks[tracks[t].uuid] = tracks[t];
                         Snapshot[tracks[t].uuid] = {
                               name: tracks[t].name,
-                              rooms: {}
+                              rooms: {},
+                              chat: []
                         };
                         Room.find({
                               track_id: tracks[t].uuid,
@@ -157,12 +160,7 @@ module.exports.start = function (httpServer) {
                               }
                               for (var r = 0; r < rooms.length; r++) {
                                     ActiveRooms[rooms[r].uuid] = rooms[r];
-                                    PrivateRoomSnapshots[rooms[r].uuid] = {
-                                          uuid: rooms[r].uuid,
-                                          name: rooms[r].name,
-                                          admin_id: rooms[r].admin_id,
-                                          drivers: {}
-                                    };
+                                    PrivateRoomSnapshots[rooms[r].uuid] = RoomPrivateViewModel(rooms[r]);
                                     for (var uuid in rooms[r].drivers) {
                                           ActiveDrivers[uuid] = { room: rooms[r] };
                                           //Set Driver status offline.
@@ -179,7 +177,6 @@ module.exports.start = function (httpServer) {
                                           });
                                     }
                                     var snapshotRoom = RoomPublicViewModel(rooms[r]);
-                                    PublicRoomSnapshots[rooms[r].uuid] = snapshotRoom;
                                     Snapshot[rooms[r].track_id].rooms[rooms[r].uuid] = snapshotRoom;
                               }
                               
@@ -227,13 +224,18 @@ function main(httpServer) {
             });
 
             socket.on('global-chat', data => {
-                  UpdateManager.emitUpdate[UpdateManager.UpdateTypes.GLOBAL_CHAT](data.track_id, data.chat);
+                  if (socket.driver && Tracks[data.track_id])
+                        UpdateManager.emitUpdate[UpdateManager.UpdateTypes.GLOBAL_CHAT](data.track_id, socket.driver.username, data.text);
             });
 
             socket.on('room-chat', data => {
                   //Emit to room if roomId exist
-                  if (socket.driver && ActiveDrivers[socket.driver.uuid].room)
-                        UpdateManager.emitUpdate[UpdateManager.UpdateTypes.ROOM_CHAT](ActiveDrivers[socket.driver.uuid].room.uuid, data.chat);
+                  if (socket.driver && ActiveDrivers[socket.driver.uuid].room){
+                        var room = ActiveDrivers[socket.driver.uuid].room;
+                        room.chat.push({ username: socket.driver.username, text: data.text });
+                        ActiveDrivers[socket.driver.uuid].room.save();
+                        UpdateManager.emitUpdate[UpdateManager.UpdateTypes.ROOM_CHAT](ActiveDrivers[socket.driver.uuid].room.uuid, socket.driver.username, data.text);
+                  }
             });
 
             socket.on('answer', (data, callback) => {
@@ -256,15 +258,15 @@ function main(httpServer) {
                   //Check if driver count is more than 1 and all drivers are ready. Then set room status to Ready.
                   var ready = 0;
                   for(var d in room.drivers){
-                        if(room.drivers[r].status == Enum_Driver_Room_Status.OFFLINE || room.drivers[r].status == Enum_Driver_Room_Status.NOT_READY){
+                        if(room.drivers[d].status == Enum_Driver_Room_Status.OFFLINE || room.drivers[d].status == Enum_Driver_Room_Status.NOT_READY){
                               ready = 0;
                               break;
-                        }else if(room.drivers[r].status == Enum_Driver_Room_Status.READY)
+                        }else if(room.drivers[d].status == Enum_Driver_Room_Status.READY)
                               ready++;
                   }
                   if(ready > 1)
                         room.status = Enum_Room_Status.IN_QUEUE_READY;
-                  UpdateManager.emitUpdate[UpdateManager.UpdateTypes.DRIVER_IS_READY](ActiveDrivers[socket.driver.uuid].room.uuid, socket.driver.uuid);
+                  UpdateManager.emitUpdate[UpdateManager.UpdateTypes.DRIVER_IS_READY](ActiveDrivers[socket.driver.uuid].room.track_id, ActiveDrivers[socket.driver.uuid].room.uuid, socket.driver.uuid);
                   callback({ success: true });
             });
 
@@ -272,7 +274,7 @@ function main(httpServer) {
                   if (!socket.driver || !ActiveDrivers[socket.driver.uuid].room)
                         return;
                   ActiveDrivers[socket.driver.uuid].room.drivers[socket.driver.uuid].status = Enum_Driver_Room_Status.NOT_READY;
-                  UpdateManager.emitUpdate[UpdateManager.UpdateTypes.DRIVER_IS_NOT_READY](ActiveDrivers[socket.driver.uuid].room.uuid, socket.driver.uuid);
+                  UpdateManager.emitUpdate[UpdateManager.UpdateTypes.DRIVER_IS_NOT_READY](ActiveDrivers[socket.driver.uuid].room.track_id, ActiveDrivers[socket.driver.uuid].room.uuid, socket.driver.uuid);
                   callback({ success: true });
             });
 
@@ -320,7 +322,8 @@ function main(httpServer) {
                                     //keep the socket by its driver id to access it when a message comes from the local server
                                     ActiveDrivers[driver.uuid] = { driver: driver, socket: socket };
                                     //send driver info back
-                                    callback({ success: true, driver: DriverPrivateViewModel(driver), token: createNewToken(DriverPrivateViewModel(driver), 60 * 60 * 24) });
+                                    _socket.emit('authenticate', { driver: DriverPrivateViewModel(driver), token: createNewToken(DriverPrivateViewModel(driver), 60 * 60 * 24) });
+                                    callback({ success: true });
                               }
                         });
 
@@ -354,7 +357,8 @@ function main(httpServer) {
                                           return;
                                     }
                                     //send driver info back
-                                    callback({ success: true, driver: DriverPrivateViewModel(d), token: logDriverIn(d, socket) });
+                                    callback({ success: true });
+                                    logDriverIn(d, socket);
                               });
 
                         });
@@ -379,7 +383,8 @@ function main(httpServer) {
                                     return;
                               }
                               //send driver info back
-                              callback({ success: true, driver: DriverPrivateViewModel(driver), token: logDriverIn(driver, socket) });
+                              callback({ success: true });
+                              logDriverIn(driver, socket);
                               return;
 
                         });
@@ -413,7 +418,7 @@ function main(httpServer) {
                         return;
                   }
 
-                  callback({ success: true, room_view: RoomPrivateViewModel(ActiveDrivers[socket.driver.uuid].room) });
+                  callback({ success: true, room_private_view: RoomPrivateViewModel(ActiveDrivers[socket.driver.uuid].room) });
             });
 
             socket.on('leave-room', (data, callback) => {
@@ -467,7 +472,8 @@ function main(httpServer) {
                               name: data.name,
                               password: data.password,
                               track_id: data.track_id,
-                              drivers: {}
+                              drivers: {},
+                              chat: []
                         });
                         newRoom.drivers[driver.uuid] = { status: Enum_Driver_Room_Status.NOT_READY, controlled_car_id: null, streamed_car_id: null };
                         newRoom.save(function (err, room) {
@@ -479,10 +485,10 @@ function main(httpServer) {
                               ActiveRooms[room.uuid] = room;
                               ActiveDrivers[driver.uuid].room = room;
                               socket.join(room.uuid);
-                              callback({ success: true, reason: "Room is created! Uuid id: " + room.uuid, room_view: RoomPrivateViewModel(room) });
+                              callback({ success: true, reason: "Room is created! Uuid id: " + room.uuid, room_private_view: RoomPrivateViewModel(room) });
 
                               //let people know that a new room was created.
-                              UpdateManager.emitUpdate[UpdateManager.UpdateTypes.ROOM_CREATED](room.track_id, RoomPublicViewModel(room), driver.uuid);
+                              UpdateManager.emitUpdate[UpdateManager.UpdateTypes.ROOM_CREATED](RoomPublicViewModel(room), driver.uuid);
                         });
                   } else {
                         callback({ success: false, reason: Enum_Callback_Reason.NOT_ENOUGH_COIN });
@@ -537,10 +543,10 @@ function main(httpServer) {
                                     if (updatedRoom) {
                                           ActiveRooms[updatedRoom.uuid] = updatedRoom;
                                           ActiveDrivers[driver.uuid].room = updatedRoom;
-                                          callback({ success: true, room_view: RoomPrivateViewModel(updatedRoom), reason: "Joined the room!" });
+                                          callback({ success: true, room_private_view: RoomPrivateViewModel(updatedRoom), reason: "Joined the room!" });
                                           
                                           //let people know that new driver joined the room.
-                                          UpdateManager.emitUpdate[UpdateManager.UpdateTypes.DRIVER_JOINED_ROOM](updatedRoom.uuid, DriverPublicViewModel(driver));
+                                          UpdateManager.emitUpdate[UpdateManager.UpdateTypes.DRIVER_JOINED_ROOM](updatedRoom.track_id, updatedRoom.uuid, DriverPublicViewModel(driver));
                                           //We join at the end to prevent DRIVER_JOINED_ROOM message to emit to new driver.
                                           socket.join(updatedRoom.uuid);
                                     } else {
@@ -567,8 +573,7 @@ function main(httpServer) {
                   //Remove driver from socket.io room too
                   ActiveDrivers[driver.uuid].socket.leave(room.uuid);
                   //let others in the room know this driver got offline
-                  UpdateManager.emitUpdate[UpdateManager.UpdateTypes.DRIVER_GOT_OFFLINE](room.uuid, driver.uuid);
-                  console.log(room.status);
+                  UpdateManager.emitUpdate[UpdateManager.UpdateTypes.DRIVER_GOT_OFFLINE](room.track_id, room.uuid, driver.uuid);
                   if (room.status == Enum_Room_Status.CREATING || room.status == Enum_Room_Status.IN_QUEUE) {
                         var timeoutId = setTimeout(function () {
                               console.log("Waited enough for the Driver. Removing from room and ActiveDrivers.");
@@ -593,19 +598,7 @@ function main(httpServer) {
                   clearTimeout(DriverTimeouts[driver.uuid]);
                   delete DriverTimeouts[driver.uuid];
             }
-            //Check if driver was in a room and disconnected. If so, connect him to the room.
-            if (ActiveDrivers[driver.uuid]) {
-                  //if room is not in ActiveRooms, delete driver's room.
-                  if (ActiveDrivers[driver.uuid].room && ActiveRooms[ActiveDrivers[driver.uuid].room.uuid]) {
-                        //Our beloved driver is online again. Emit an Update to the room.
-                        ActiveDrivers[driver.uuid].room.drivers[driver.uuid].status = Enum_Driver_Room_Status.NOT_READY;
-                        UpdateManager.emitUpdate[UpdateManager.UpdateTypes.DRIVER_GOT_ONLINE](ActiveDrivers[driver.uuid].room.uuid, driver.uuid);
-                        _socket.emit("room-snapshot", { room_view: PrivateRoomSnapshots[ActiveDrivers[driver.uuid].room.uuid]});
-                        _socket.join(ActiveDrivers[driver.uuid].room.uuid);
-                  } else {
-                        delete ActiveDrivers[driver.uuid].room;
-                  }
-            }
+
             //keep driver info on the socket
             _socket.driver = driver;
             //keep the socket by its driver id to access it when a message comes from the local server
@@ -617,7 +610,19 @@ function main(httpServer) {
             driver.save();
             //db.collection("drivers").updateOne({ _id: driver.uuid },{ $set:{ last_login: driver.last_login, status: driver.status }});
             //Create new token with expiration date
-            return createNewToken(DriverPrivateViewModel(driver), 60 * 60 * 24);
+            _socket.emit('authenticate', { driver: DriverPrivateViewModel(driver), token: createNewToken(DriverPrivateViewModel(driver), 60 * 60 * 24) });
+
+            //Check if driver was in a room and disconnected. If so, connect him to the room.
+            //if room is not in ActiveRooms, delete driver's room.
+            if (ActiveDrivers[driver.uuid].room && ActiveRooms[ActiveDrivers[driver.uuid].room.uuid]) {
+                  //Our beloved driver is online again. Emit an Update to the room.
+                  ActiveDrivers[driver.uuid].room.drivers[driver.uuid].status = Enum_Driver_Room_Status.NOT_READY;
+                  UpdateManager.emitUpdate[UpdateManager.UpdateTypes.DRIVER_GOT_ONLINE](ActiveDrivers[driver.uuid].room.track_id, ActiveDrivers[driver.uuid].room.uuid, driver.uuid);
+                  _socket.emit("room-snapshot", { room_private_view: PrivateRoomSnapshots[ActiveDrivers[driver.uuid].room.uuid]});
+                  _socket.join(ActiveDrivers[driver.uuid].room.uuid);
+            } else {
+                  delete ActiveDrivers[driver.uuid].room;
+            }
       }
 
       //This is used when TakeNextRoomIn is called.
@@ -660,83 +665,87 @@ function main(httpServer) {
             //emitUpdate does three things; 1) Update Snapshots, 2) Send Public Updates To Everyone 3) Send Private Updates To Drivers in Rooms
             //Call emitUpdate after you are done with ActiveDrivers, ActiveRooms etc. Since emitUpdate is using them to create Snaphots.
             this.emitUpdate = [];
-            this.emitUpdate[this.UpdateTypes.ROOM_CREATED] = function (track_id, room_view, admin_id) {
-                  io.emit("update", { type: _that.UpdateTypes.ROOM_CREATED, data: { track_id, room_view } });
-                  Snapshot[track_id].rooms[room_view.uuid] = room_view;
-                  PublicRoomSnapshots[room_view.uuid] = room_view;
-                  PrivateRoomSnapshots[room_view.uuid] = { name: room_view.name, admin_id, drivers: {} };
-                  for (var d in ActiveRooms[room_view.uuid].drivers) {
-                        PrivateRoomSnapshots[room_view.uuid].drivers[d] = DriverPublicViewModel(ActiveDrivers[d].driver);
+            this.emitUpdate[this.UpdateTypes.ROOM_CREATED] = function (room_public_view, admin_id) {
+                  io.emit("update", { type: _that.UpdateTypes.ROOM_CREATED, data: { room_public_view } });
+                  Snapshot[room_public_view.track_id].rooms[room_public_view.uuid] = room_public_view;
+                  PrivateRoomSnapshots[room_public_view.uuid] = ActiveRooms[room_public_view.uuid];
+                  for (var d in ActiveRooms[room_public_view.uuid].drivers) {
+                        PrivateRoomSnapshots[room_public_view.uuid].drivers[d] = DriverPublicViewModel(ActiveDrivers[d].driver);
                   }
             };
             this.emitUpdate[this.UpdateTypes.ROOM_CLOSED] = function (track_id, room_id) {
-                  io.emit("update", { type: _that.UpdateTypes.ROOM_CLOSED, data: { room_id } });
+                  io.emit("update", { type: _that.UpdateTypes.ROOM_CLOSED, data: { track_id, room_id } });
                   delete Snapshot[track_id].rooms[room_id];
-                  delete PublicRoomSnapshots[room_id];
                   delete PrivateRoomSnapshots[room_id];
             };
-            this.emitUpdate[this.UpdateTypes.ROOM_ENTERED_RACE] = function (room_id) {
-                  Snapshot[track_id].room_in_race = { uuid: room_id, drivers: {} };
+            this.emitUpdate[this.UpdateTypes.ROOM_ENTERED_RACE] = function (track_id, room_id) {
+                  Snapshot[track_id].room_in_race = { uuid: room_id, track_id, drivers: {} };
                   for (var d in ActiveRooms[room_id].drivers) {
                         Snapshot[track_id].room_in_race.drivers[d] = { username: ActiveDrivers[d].driver };
                   }
                   //As we add the room to room_in_race, we remove it from the waiting queue.
                   delete Snapshot[track_id].rooms[room_id];
-                  delete PublicRoomSnapshots[room_id];
                   io.emit("update", { type: _that.UpdateTypes.ROOM_ENTERED_RACE, data: { room : Snapshot[track_id].room_in_race } });
             };
             this.emitUpdate[this.UpdateTypes.ROOM_FINISHED_RACE] = function (track_id, room_id, ranking) {
-                  io.emit("update", { type: _that.UpdateTypes.ROOM_FINISHED_RACE, data: { room_id, ranking } });
+                  io.emit("update", { type: _that.UpdateTypes.ROOM_FINISHED_RACE, data: { track_id, room_id, ranking } });
                   Snapshot[track_id].room_in_race.ranking = ranking;
                   PrivateRoomSnapshots[room_id].ranking = ranking;
                   //TODO: On client side, check if room snapshot has ranking. If so, show ranking.
             };
-            this.emitUpdate[this.UpdateTypes.DRIVER_JOINED_ROOM] = function (room_id, driver_view) {
-                  PublicRoomSnapshots[room_id].driver_count.not_ready++;
-                  PrivateRoomSnapshots[room_id] = RoomPrivateViewModel(ActiveRooms[room_id]);
-                  io.emit("update", { type: _that.UpdateTypes.DRIVER_JOINED_ROOM, data: { room_id, driver_count: PublicRoomSnapshots[room_id].driver_count } });
+            this.emitUpdate[this.UpdateTypes.DRIVER_JOINED_ROOM] = function (track_id, room_id, driver_view) {
+                  Snapshot[track_id].rooms[room_id].driver_count.not_ready++;
+                  PrivateRoomSnapshots[room_id].drivers[driver_view.uuid] = driver_view;
+                  //PrivateRoomSnapshots[room_id] = RoomPrivateViewModel(ActiveRooms[room_id]);
+                  io.emit("update", { type: _that.UpdateTypes.DRIVER_JOINED_ROOM, data: { track_id, room_id, driver_count: Snapshot[track_id].rooms[room_id].driver_count } });
                   io.to(room_id).emit("room-update", { type: _that.UpdateTypes.DRIVER_JOINED_ROOM, data: {  driver_view } });
             };
-            this.emitUpdate[this.UpdateTypes.DRIVER_LEFT_ROOM] = function (room_id, driver_id) {
-                  PublicRoomSnapshots[room_id] = RoomPublicViewModel(ActiveRooms[room_id]);
-                  PrivateRoomSnapshots[room_id] = RoomPrivateViewModel(ActiveRooms[room_id]);
-                  io.emit("update", { type: _that.UpdateTypes.DRIVER_LEFT_ROOM, data: { room_id, driver_count: PublicRoomSnapshots[room_id].driver_count } });
+            this.emitUpdate[this.UpdateTypes.DRIVER_LEFT_ROOM] = function (track_id, room_id, driver_id) {
+                  Snapshot[track_id].rooms[room_id] = RoomPublicViewModel(ActiveRooms[room_id]);
+                  delete PrivateRoomSnapshots[room_id].drivers[driver_id];
+                  //PrivateRoomSnapshots[room_id] = RoomPrivateViewModel(ActiveRooms[room_id]);
+                  io.emit("update", { type: _that.UpdateTypes.DRIVER_LEFT_ROOM, data: { track_id, room_id, driver_count: Snapshot[track_id].rooms[room_id].driver_count } });
                   io.to(room_id).emit("room-update", { type: _that.UpdateTypes.DRIVER_LEFT_ROOM, data: { driver_id } });
-                  
             };
-            this.emitUpdate[this.UpdateTypes.DRIVER_GOT_ONLINE] = function (room_id, driver_id) {
-                  PublicRoomSnapshots[room_id] = RoomPublicViewModel(ActiveRooms[room_id]);
-                  PrivateRoomSnapshots[room_id] = RoomPrivateViewModel(ActiveRooms[room_id]);
-                  io.emit("update", { type: _that.UpdateTypes.DRIVER_GOT_ONLINE, data: { room_id, driver_count: PublicRoomSnapshots[room_id].driver_count } });
+            this.emitUpdate[this.UpdateTypes.DRIVER_GOT_ONLINE] = function (track_id, room_id, driver_id) {
+                  Snapshot[track_id].rooms[room_id] = RoomPublicViewModel(ActiveRooms[room_id]);
+                  PrivateRoomSnapshots[room_id].drivers[driver_id].status = Enum_Driver_Room_Status.NOT_READY;
+                  //PrivateRoomSnapshots[room_id] = RoomPrivateViewModel(ActiveRooms[room_id]);
+                  io.emit("update", { type: _that.UpdateTypes.DRIVER_GOT_ONLINE, data: { track_id, room_id, driver_count: Snapshot[track_id].rooms[room_id].driver_count } });
                   io.to(room_id).emit("room-update", { type: _that.UpdateTypes.DRIVER_GOT_ONLINE, data: { driver_id } });
             };
-            this.emitUpdate[this.UpdateTypes.DRIVER_GOT_OFFLINE] = function (room_id, driver_id) {
-                  PublicRoomSnapshots[room_id] = RoomPublicViewModel(ActiveRooms[room_id]);
-                  PrivateRoomSnapshots[room_id] = RoomPrivateViewModel(ActiveRooms[room_id]);
-                  io.emit("update", { type: _that.UpdateTypes.DRIVER_GOT_OFFLINE, data: { room_id, driver_count: PublicRoomSnapshots[room_id].driver_count } });
+            this.emitUpdate[this.UpdateTypes.DRIVER_GOT_OFFLINE] = function (track_id, room_id, driver_id) {
+                  Snapshot[track_id].rooms[room_id] = RoomPublicViewModel(ActiveRooms[room_id]);
+                  PrivateRoomSnapshots[room_id].drivers[driver_id].status = Enum_Driver_Room_Status.OFFLINE;
+                  //PrivateRoomSnapshots[room_id] = RoomPrivateViewModel(ActiveRooms[room_id]);
+                  io.emit("update", { type: _that.UpdateTypes.DRIVER_GOT_OFFLINE, data: { track_id, room_id, driver_count: Snapshot[track_id].rooms[room_id].driver_count } });
                   io.to(room_id).emit("room-update", { type: _that.UpdateTypes.DRIVER_GOT_OFFLINE, data: { driver_id } });
             };
-            this.emitUpdate[this.UpdateTypes.DRIVER_IS_READY] = function (room_id, driver_id) {
-                  PublicRoomSnapshots[room_id] = RoomPublicViewModel(ActiveRooms[room_id]);
-                  PrivateRoomSnapshots[room_id] = RoomPrivateViewModel(ActiveRooms[room_id]);
-                  io.emit("update", { type: _that.UpdateTypes.DRIVER_IS_READY, data: { room_id, driver_count: PublicRoomSnapshots[room_id].driver_count } });
+            this.emitUpdate[this.UpdateTypes.DRIVER_IS_READY] = function (track_id, room_id, driver_id) {
+                  Snapshot[track_id].rooms[room_id] = RoomPublicViewModel(ActiveRooms[room_id]);
+                  PrivateRoomSnapshots[room_id].drivers[driver_id].status = Enum_Driver_Room_Status.READY;
+                  //PrivateRoomSnapshots[room_id] = RoomPrivateViewModel(ActiveRooms[room_id]);
+                  io.emit("update", { type: _that.UpdateTypes.DRIVER_IS_READY, data: { track_id, room_id, driver_count: Snapshot[track_id].rooms[room_id].driver_count } });
                   io.to(room_id).emit("room-update", { type: _that.UpdateTypes.DRIVER_IS_READY, data: { driver_id } });
             };
-            this.emitUpdate[this.UpdateTypes.DRIVER_IS_NOT_READY] = function (room_id, driver_id) {
-                  PublicRoomSnapshots[room_id] = RoomPublicViewModel(ActiveRooms[room_id]);
-                  PrivateRoomSnapshots[room_id] = RoomPrivateViewModel(ActiveRooms[room_id]);
-                  io.emit("update", { type: _that.UpdateTypes.DRIVER_IS_NOT_READY, data: { room_id, driver_count: PublicRoomSnapshots[room_id].driver_count } });
+            this.emitUpdate[this.UpdateTypes.DRIVER_IS_NOT_READY] = function (track_id, room_id, driver_id) {
+                  Snapshot[track_id].rooms[room_id] = RoomPublicViewModel(ActiveRooms[room_id]);
+                  PrivateRoomSnapshots[room_id].drivers[driver_id].status = Enum_Driver_Room_Status.NOT_READY;
+                  //PrivateRoomSnapshots[room_id] = RoomPrivateViewModel(ActiveRooms[room_id]);
+                  io.emit("update", { type: _that.UpdateTypes.DRIVER_IS_NOT_READY, data: { track_id, room_id, driver_count: Snapshot[track_id].rooms[room_id].driver_count } });
                   io.to(room_id).emit("room-update", { type: _that.UpdateTypes.DRIVER_IS_NOT_READY, data: { driver_id } });
             };
             this.emitUpdate[this.UpdateTypes.ADMIN_CHANGED] = function (room_id, driver_id) {
                   io.to(room_id).emit("room-update", { type: _that.UpdateTypes.ADMIN_CHANGED, data: { driver_id } });
                   PrivateRoomSnapshots[room_id].admin_id = driver_id;
             };
-            this.emitUpdate[this.UpdateTypes.GLOBAL_CHAT] = function (track_id, chat) {
-                  io.emit("update", { type: _that.UpdateTypes.GLOBAL_CHAT, data: { track_id, chat } });
+            this.emitUpdate[this.UpdateTypes.GLOBAL_CHAT] = function (track_id, username, text) {
+                  Snapshot[track_id].chat.push({ username, text });
+                  io.emit("update", { type: _that.UpdateTypes.GLOBAL_CHAT, data: { track_id, username, text } });
             };
-            this.emitUpdate[this.UpdateTypes.ROOM_CHAT] = function (room_id, chat) {
-                  io.to(room_id).emit("room-update", { type: _that.UpdateTypes.ROOM_CHAT, data: { chat } });
+            this.emitUpdate[this.UpdateTypes.ROOM_CHAT] = function (room_id, username, text) {
+                  PrivateRoomSnapshots[room_id].chat.push({ username, text });
+                  io.to(room_id).emit("room-update", { type: _that.UpdateTypes.ROOM_CHAT, data: { username, text } });
             };
 
       };
@@ -745,6 +754,9 @@ function main(httpServer) {
             var room = ActiveDrivers[driverid].room;
             //remove driver from the room
             if (room && room.drivers[driverid]) {
+                  if(ActiveDrivers[driverid].socket){
+                        ActiveDrivers[driverid].socket.leave(room.uuid);
+                  }
                   delete room.drivers[driverid];
                   delete ActiveDrivers[driverid].room;
                   //if this was the only driver in the room, close the room.
@@ -764,7 +776,7 @@ function main(httpServer) {
                                     }
                               }
                         }
-                        UpdateManager.emitUpdate[UpdateManager.UpdateTypes.DRIVER_LEFT_ROOM](room.uuid, driverid);
+                        UpdateManager.emitUpdate[UpdateManager.UpdateTypes.DRIVER_LEFT_ROOM](room.track_id, room.uuid, driverid);
                   }
                   room.markModified("drivers");
                   room.save();
@@ -863,7 +875,7 @@ function main(httpServer) {
             
             */
 
-            socket.on('getsnapshot', (data, callback) => {
+            socket.on('getsnapshot', () => {
                   //Send Tracks, Rooms and Drivers.
                   socket.emit("snapshot", Snapshot);
             });
@@ -906,7 +918,7 @@ function main(httpServer) {
 
                   localServer.createRace(data.race_id, data.max_duration, driver_ids, data.car_ids);
                   
-                  UpdateManager.emitUpdate[UpdateManager.UpdateTypes.ROOM_ENTERED_RACE](room.uuid);
+                  UpdateManager.emitUpdate[UpdateManager.UpdateTypes.ROOM_ENTERED_RACE](room.track_id, room.uuid);
             });
 
             socket.on('controlcar', (data, callback) => {
@@ -1065,18 +1077,21 @@ var localServerCallbacks = {
 var RoomPrivateViewModel = function (room) {
       var model = {
             uuid: room.uuid,
+            track_id: room.track_id,
+            admin_id: room.admin_id,
             name: room.name,
             status: room.status,
             drivers: {},
-            is_locked: room.password != null && room.password != ""
+            is_locked: room.password != null && room.password != "",
+            chat: []
       };
+      for(var c=0;c<room.chat.length;c++){
+            model.chat.push(room.chat[c]);
+      }
       for(var driver_uuid in room.drivers){
-            model.drivers[driver_uuid] = {};
-            model.drivers[driver_uuid].status = room.drivers[driver_uuid].status;
-            model.drivers[driver_uuid].username = ActiveDrivers[driver_uuid].driver.username;
-            model.drivers[driver_uuid].bronze_medal = ActiveDrivers[driver_uuid].driver.bronze_medal;
-            model.drivers[driver_uuid].silver_medal = ActiveDrivers[driver_uuid].driver.silver_medal;
-            model.drivers[driver_uuid].gold_medal = ActiveDrivers[driver_uuid].driver.gold_medal;
+            if(ActiveDrivers[driver_uuid]){
+                  model.drivers[driver_uuid] = DriverPublicViewModel(ActiveDrivers[driver_uuid].driver);
+            }
       }
       return model;
 };
@@ -1084,6 +1099,7 @@ var RoomPrivateViewModel = function (room) {
 var RoomPublicViewModel = function (room) {
       var model = {
             uuid: room.uuid,
+            track_id: room.track_id,
             name: room.name,
             status: room.status,
             driver_count: {offline: 0, not_ready: 0, ready: 0},
