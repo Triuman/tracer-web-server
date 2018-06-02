@@ -1,5 +1,6 @@
 "use strict";
 
+
 //To prevent Threejs getInverse warnings.
 console.warn = function() {};
 
@@ -15,7 +16,9 @@ const Enum_Callback_Reason = {
       ROOM_IS_FULL: 7,
       SAME_USERNAME_OR_EMAIL_EXIST: 8,
       NO_TRACK_WITH_GIVEN_ID: 9,
-      NO_ROOM_WITH_GIVEN_ID: 10
+      NO_ROOM_WITH_GIVEN_ID: 10,
+      DRIVER_IS_NOT_IN_A_ROOM: 11,
+      STILL_IN_RACE: 12 //If admin tries to take next room in while there is a race running on a track, we will send this reason.
 };
 
 const Enum_Driver_Room_Status = {
@@ -40,7 +43,170 @@ const UpdateTypes = {
       ROOM_CHAT: 12
 };
 
-var driver = null;
+var driver = null; //This is DriverPrivateModel
+var my_room_view = null;
+var roomList = {}; //This has rooms with their uuids. uuid: { room_view, DOM }
+var track_id = null; //We should set this when we get a snapshot.
+
+var RoomItem = function(room_view){
+      var _that = this;
+
+      this.domElements = null;
+      this.room_view = null;
+
+      function CreateDomElements(){
+            // <div class="room-line">
+            //       <div id="divRoomNumber" class="rm1">1</div>
+            //       <div class="rm2">
+            //           <h3 id="divRoomName">Room-1</h3>
+            //           <a href="" class="btn btn-warning">Join</a>
+            //           <span>
+            //               <i id="listCarIcon1" title="" data-toggle="tooltip" class="fa fa-car active" data-original-title="Ready"></i>
+            //               <i id="listCarIcon2"  title="" data-toggle="tooltip" class="fa fa-car pause" data-original-title="Not Ready"></i>
+            //               <i id="listCarIcon3"  title="" data-toggle="tooltip" class="fa fa-car passive" data-original-title="Empty"></i>
+            //               <i id="listCarIcon4"  title="" data-toggle="tooltip" class="fa fa-car passive" data-original-title="Empty"></i>
+            //           </span>
+            //       </div>
+            //   </div>
+            
+            _that.domElements = {};
+
+            _that.domElements.container = document.createElement('div');
+            $(_that.domElements.container).addClass("room-line");
+
+            _that.domElements.room_number = document.createElement('div');
+            $(_that.domElements.room_number).addClass("rm1");
+            $(_that.domElements.container).append(_that.domElements.room_number);
+
+            var inner_container = document.createElement('div');
+            $(inner_container).addClass("rm2");
+            $(_that.domElements.container).append(inner_container);
+            
+            _that.domElements.room_name = document.createElement('h3');
+            $(inner_container).append(_that.domElements.room_name);
+
+            _that.domElements.join_button = document.createElement('a');
+            $(_that.domElements.join_button).append("join");
+            $(_that.domElements.join_button).addClass("btn btn-warning");
+            $(inner_container).append(_that.domElements.join_button);
+
+            var span = document.createElement('span');
+            $(inner_container).append(span);
+
+            for(var d=1;d<=4;d++){
+                  _that.domElements["car_image" + d] = document.createElement('i');
+                  $(_that.domElements["car_image" + d]).addClass("fa fa-car passive");
+                  $(_that.domElements["car_image" + d]).attr("data-toggle", "tooltip");
+                  $(_that.domElements["car_image" + d]).attr("title", "");
+                  $(_that.domElements["car_image" + d]).attr("data-original-title", "Empty");
+
+                  $(span).append(_that.domElements["car_image" + d]);
+            }
+      }
+
+      this.setRoomNumber = function(number){
+            $(this.domElements.room_number).text(number);
+      };
+
+      this.setDriverCount = function(driver_count){
+            var ready = 0, not_ready = 0, offline = 0;
+            for(var d=1;d<=4;d++){
+                  var carClass = "";
+                  var carTooltip = "";
+                  if(driver_count.ready > ready){
+                        ready++;
+                        carClass = "active";
+                        carTooltip = "Ready";
+                  }else if(driver_count.not_ready > not_ready){
+                        not_ready++;
+                        carClass = "pause";
+                        carTooltip = "Not Ready";
+                  }else{
+                        offline++;
+                        carClass = "passive";
+                        carTooltip = "Empty";
+                  }
+                  $(this.domElements["car_image" + d]).removeClass().addClass("fa fa-car " + carClass);
+                  $(this.domElements["car_image" + d]).attr("data-toggle", "tooltip");
+                  $(this.domElements["car_image" + d]).attr("title", "");
+                  $(this.domElements["car_image" + d]).attr("data-original-title", carTooltip);
+            }
+      };
+
+      this.setRoomView = function(room_view){
+            if(!this.domElements)
+                  CreateDomElements();
+                  
+            this.room_view = room_view;
+
+            // var room_view = {
+            //       uuid: room.uuid,
+            //       name: room.name,
+            //       status: room.status,
+            //       driver_count: {offline: 0, not_ready: 0, ready: 0},
+            //       is_locked: room.password != null && room.password != ""
+            // };
+      
+            $(this.domElements.room_name).text(room_view.name);
+
+            console.log(this.domElements.join_button);
+            //unbind due to multiple calls to setRoomView function.
+            this.domElements.join_button.addEventListener("click", function(){ JoinRoom(room_view.uuid); });
+            //$(this.domElements.join_button).one("click", function(){ JoinRoom(room_view.uuid); });
+            
+            this.setDriverCount(room_view.driver_count);
+      
+      };
+      if(room_view)
+            this.setRoomView(room_view);
+
+      return this;
+};
+
+function SetRoomNumbers(){
+      var roomDomContainerListInOrder = [];
+      for(var r1 in roomList){
+            var number = 1;
+            for(var r2 in roomList){
+                  if(roomList[r1].room_view.create_date > roomList[r2].room_view.create_date)
+                        number++;
+            }
+            roomList[r1].setRoomNumber(number);
+            if(my_room_view && roomList[r1].room_view.uuid == my_room_view.uuid){
+                  //this is our room. Set its number too.
+                  $("#divRoomNumber").text(number);
+            }
+            roomDomContainerListInOrder[number] = roomList[r1].domElements.container;
+      }
+      for(var r=0;r<roomDomContainerListInOrder.length;r++){
+            if(roomDomContainerListInOrder[r]){
+                  $(roomDomContainerListInOrder[r]).remove();
+                  $("#divRoomList").append(roomDomContainerListInOrder[r]);
+            }
+      }
+}
+
+function hideJoinButtons(){
+      for(var r in roomList){
+            $(roomList[r].domElements.join_button).hide();
+      }
+}
+function showJoinButtons(){
+      for(var r in roomList){
+            $(roomList[r].domElements.join_button).show();
+      }
+}
+
+function onNewRoomView(room_view){
+      if(roomList[room_view.uuid]){
+            roomList[room_view.uuid].setRoomView(room_view);
+      }else{
+            var newRoom = new RoomItem(room_view);
+            $("#divRoomList").append(newRoom.domElements.container);
+            roomList[newRoom.room_view.uuid] = newRoom;
+      }
+      SetRoomNumbers();
+}
 
 var socket;
 function StartSocket() {
@@ -52,7 +218,6 @@ function StartSocket() {
             var token = localStorage.getItem("token");
             if (token)
                   Authenticate(token);
-
       });
 
       socket.on('disconnect', () => {
@@ -62,7 +227,21 @@ function StartSocket() {
       socket.on('snapshot', (data) => {
             console.log("Got a snapshot -> ");
             console.log(data);
+            for(var t_id in data)
+                  track_id = t_id;
+
+            for(var r in data[track_id].rooms){
+                  onNewRoomView(data[track_id].rooms[r]);
+            }
       });
+
+      socket.on('room-snapshot', (data) => {
+            console.log("Got a room snapshot -> ");
+            console.log(data);
+            ProcessRoomSnapshot(data.room_view);
+      });
+
+      
 
       socket.on('offer', (data) => {
             console.log("Got offer! -> ", data.sdp);
@@ -75,40 +254,155 @@ function StartSocket() {
       socket.on('room-update', (update) => {
             console.log("Got room update! -> ");
             console.log(update);
-            UpdateHandler[update.type](update.data);
+            RoomUpdateHandler[update.type](update.data);
       });
+
+      function requestNewRoomSnapshot(){
+            socket.emit("room-snapshot", {}, function (data) {
+                  if (data.success) {
+                        ProcessRoomSnapshot(data.room_view);
+                  } else {
+                        my_room_view = null;
+                        $('#divRoom').hide();
+                        console.log("Error while getting room snapshot.");
+                        switch (data.reason) {
+                              case Enum_Callback_Reason.NOT_LOGGED_IN:
+                                    console.log("Reason.NOT_LOGGED_IN");
+                                    break;
+                              case Enum_Callback_Reason.DRIVER_IS_NOT_IN_A_ROOM:
+                                    console.log("Reason.DRIVER_IS_NOT_IN_A_ROOM");
+                                    break;
+                        }
+                  }
+            });
+      }
+
+
+      function requestNewDriverView(){
+            socket.emit("driver-view", {}, function (data) {
+                  if (data.success) {
+                        my_room_view.drivers[data.driver_view.uuid] = data.driver_view;
+                        ProcessRoomSnapshot(my_room_view);
+                  } else {
+                        console.log("Error while getting room snapshot.");
+                        switch (data.reason) {
+                              case Enum_Callback_Reason.NOT_LOGGED_IN:
+                                    console.log("Reason.NOT_LOGGED_IN");
+                                    my_room_view = null;
+                                    $('#divRoom').hide();
+                                    break;
+                              case Enum_Callback_Reason.DRIVER_IS_NOT_IN_A_ROOM:
+                                    console.log("Reason.DRIVER_IS_NOT_IN_A_ROOM");
+                                    my_room_view = null;
+                                    $('#divRoom').hide();
+                                    break;
+                        }
+                  }
+            });
+      }
+
       var RoomUpdateHandler = {};
       RoomUpdateHandler[UpdateTypes.DRIVER_JOINED_ROOM] = function (data) {
             //put driver to next empty slot
-            //data: { driver_view }
+            //data: {  driver_view }
+            if(!my_room_view){
+                  requestNewRoomSnapshot();
+                  return;
+            }
+            my_room_view.drivers[data.driver_view.uuid] = data.driver_view;
+            ProcessRoomSnapshot(my_room_view);
       };
       RoomUpdateHandler[UpdateTypes.DRIVER_LEFT_ROOM] = function (data) {
             //remove driver from the slot
-            //data: { driver_id }
+            //data: {  driver_id }
+            if(!my_room_view){
+                  requestNewRoomSnapshot();
+                  return;
+            }
+            delete my_room_view.drivers[data.driver_id];
+            ProcessRoomSnapshot(my_room_view);
       };
       RoomUpdateHandler[UpdateTypes.DRIVER_GOT_ONLINE] = function (data) {
             //change slot to online/not ready view
-            //data: { driver_id }
+            //data: {  driver_id }
+            if(!my_room_view){
+                  requestNewRoomSnapshot();
+                  return;
+            }
+            if(!my_room_view.drivers[data.driver_id]){
+                  requestNewDriverView();
+                  return;
+            }
+            my_room_view.drivers[data.driver_id].status = Enum_Driver_Room_Status.NOT_READY;
+            ProcessRoomSnapshot(my_room_view);
       };
       RoomUpdateHandler[UpdateTypes.DRIVER_GOT_OFFLINE] = function (data) {
             //change slot to offline view
-            //data: { driver_id }
+            //data: {  driver_id }
+            if(!my_room_view){
+                  requestNewRoomSnapshot();
+                  return;
+            }
+            if(!my_room_view.drivers[data.driver_id]){
+                  requestNewDriverView();
+                  return;
+            }
+            my_room_view.drivers[data.driver_id].status = Enum_Driver_Room_Status.OFFLINE;
+            ProcessRoomSnapshot(my_room_view);
       };
       RoomUpdateHandler[UpdateTypes.DRIVER_IS_READY] = function (data) {
             //set driver's slot to green
-            //data: { driver_id }
+            //data: {  driver_id }
+            if(!my_room_view){
+                  requestNewRoomSnapshot();
+                  return;
+            }
+            if(!my_room_view.drivers[data.driver_id]){
+                  requestNewDriverView();
+                  return;
+            }
+            my_room_view.drivers[data.driver_id].status = Enum_Driver_Room_Status.READY;
+            ProcessRoomSnapshot(my_room_view);
       };
       RoomUpdateHandler[UpdateTypes.DRIVER_IS_NOT_READY] = function (data) {
             //set driver's slot to yellow
-            //data: { driver_id }
+            //data: {  driver_id }
+            if(!my_room_view){
+                  requestNewRoomSnapshot();
+                  return;
+            }
+            if(!my_room_view.drivers[data.driver_id]){
+                  requestNewDriverView();
+                  return;
+            }
+            my_room_view.drivers[data.driver_id].status = Enum_Driver_Room_Status.NOT_READY;
+            ProcessRoomSnapshot(my_room_view);
       };
       RoomUpdateHandler[UpdateTypes.ADMIN_CHANGED] = function (data) {
             //if this is admin, let him see kick buttons. Now he is able to kick other drivers.
-            //data: { driver_id }
+            //data: {  driver_id }
+            if(!my_room_view){
+                  requestNewRoomSnapshot();
+                  return;
+            }
+            if(!my_room_view.drivers[data.driver_id]){
+                  requestNewDriverView();
+                  return;
+            }
+            my_room_view.admin_id = data.driver_id;
+            if(driver.uuid == my_room_view.admin_id){
+                  //TODO: Show some menus to remove drivers from the room.
+            }else{
+                  //TODO: Hide those menus.
+            }
       };
       RoomUpdateHandler[UpdateTypes.ROOM_CHAT] = function (data) {
             console.log("Room chat ->");
             console.log(data);
+            if(!my_room_view){
+                  requestNewRoomSnapshot();
+                  return;
+            }
       };
 
       //TODO: If you cannot find a track or room or driver with the given id on updates, there is an inconsistency. So, request a new snapshot from the Web Server to catch up.
@@ -122,14 +416,34 @@ function StartSocket() {
       UpdateHandler[UpdateTypes.ROOM_CREATED] = function (data) {
             //append room to the track's room list
             //data = { track_id, room_view, admin_id }
+            onNewRoomView(data.room_view);
       };
       UpdateHandler[UpdateTypes.ROOM_CLOSED] = function (data) {
             //remove room from its track's room list
             //data: { room_id }
+            var room = roomList[data.room_id];
+            if(room){
+                  delete roomList[data.room_id];
+                  $(room.domElements.container).remove();
+                  SetRoomNumbers();
+            }
       };
       UpdateHandler[UpdateTypes.ROOM_ENTERED_RACE] = function (data) {
             //remove room from its track's room list and show it over the camera stream.
             //data: { room: Snapshot[track_id].room_in_race }
+            /* room_in_race: {
+                  uuid: ""
+                  drivers: {
+                     "driveruuid1": {
+                        username: driver.username
+                     }
+                  },
+                  ranking: ["driver_uuid1", "driver_uuid2", "driver_uuid3", "driver_uuid4"]
+               } */
+
+               $(roomList[data.room.uuid].domElements.container).remove();
+               delete roomList[data.room.uuid];
+               SetRoomNumbers();
       };
       UpdateHandler[UpdateTypes.ROOM_FINISHED_RACE] = function (data) {
             //show result of the race.
@@ -138,27 +452,33 @@ function StartSocket() {
       UpdateHandler[UpdateTypes.DRIVER_JOINED_ROOM] = function (data) {
             //set room driver count text
             //data: { room_id, driver_count }
+            roomList[data.room_id].setDriverCount(data.driver_count);
       };
       UpdateHandler[UpdateTypes.DRIVER_LEFT_ROOM] = function (data) {
             //set room driver count text
             //data: { room_id, driver_count }
+            roomList[data.room_id].setDriverCount(data.driver_count);
       };
       //These four updates will call the same function.
       UpdateHandler[UpdateTypes.DRIVER_GOT_ONLINE] = function (data) {
             //Update room car slot colors with the room_view.
-            //data: { room_view: RoomViewModel(ActiveRooms[room]) }
+            //data: { room_id, driver_count }
+            roomList[data.room_id].setDriverCount(data.driver_count);
       };
       UpdateHandler[UpdateTypes.DRIVER_GOT_OFFLINE] = function (data) {
             //Update room car slot colors with the room_view.
-            //data: { room_view: RoomViewModel(ActiveRooms[room]) }
+            //data: { room_id, driver_count }
+            roomList[data.room_id].setDriverCount(data.driver_count);
       };
       UpdateHandler[UpdateTypes.DRIVER_IS_READY] = function (data) {
             //Update room car slot colors with the room_view.
-            //data: { room_view: RoomViewModel(ActiveRooms[room]) }
+            //data: { room_id, driver_count }
+            roomList[data.room_id].setDriverCount(data.driver_count);
       };
       UpdateHandler[UpdateTypes.DRIVER_IS_NOT_READY] = function (data) {
             //Update room car slot colors with the room_view.
-            //data: { room_view: RoomViewModel(ActiveRooms[room]) }
+            //data: { room_id, driver_count }
+            roomList[data.room_id].setDriverCount(data.driver_count);
       };
       UpdateHandler[UpdateTypes.GLOBAL_CHAT] = function (data) {
             console.log("Global chat ->");
@@ -170,25 +490,120 @@ function StartSocket() {
 
 };
 
-function SetReady() {
-      //we tell web server that we are ready to race.
-      socket.emit("ready", function (data) {
-            if (data.success) {
-                  //set "Set Ready" button to "Not Ready"
-            } else {
+function AddButtonEvents(){
+      //Add Button Events
+      $('#btnLogin').on('click', function () {
+            Authenticate($('#txtLoginEmail').val(), $('#txtLoginPassword').val());
+            $('#modalLogin').modal('hide');
+      });
 
-            }
+      $('#btnRegister').on('click', function () {
+            Register($('#txtRegisterUsername').val(), $('#txtRegisterPassword').val(), $('#txtRegisterEmail').val());
+            $('#modalRegister').modal('hide');
+      });
+
+      $('#btnLogout').on('click', function () {
+            Logout();
+      });
+
+      $('#btnCreateRoom').on('click', function () {
+            CreateRoom($('#txtRoomName').val(), $('#txtRoomPassword').val(), track_id);
+            $('#modalCreateRoom').modal('hide');
+      });
+
+      $('#btnLeaveRoom').on('click', function () {
+            if($('#btnLeaveRoom').text() == "Are you sure?")
+                  LeaveRoom();
+            $('#btnLeaveRoom').text("Are you sure?");
+      });
+      $('#btnLeaveRoom').mouseleave(function() {
+            $('#btnLeaveRoom').text("Leave Room");
+      });
+
+      $('#btnReady').on('click', function () {
+            SetReady();
       });
 }
-function SetNotReady() {
-      //we tell web server that we are ready to race.
-      socket.emit("notready", function (data) {
-            if (data.success) {
-                  //set "Set Not Ready" button to "Set Ready"
-            } else {
 
-            }
-      });
+function ProcessRoomSnapshot(room_view){
+      /* room_view = {
+            uuid: room.uuid,
+            name: room.name,
+            status: room.status,
+            drivers: {
+                  driveruuid1:{
+                        status,
+                        username,
+                        bronze_medal,
+                        silver_medal,
+                        gold_medal
+                  }
+            },
+            is_locked: room.password != null
+      } */
+
+      hideJoinButtons();
+
+      my_room_view = room_view;
+
+      if(roomList[my_room_view.uuid]){
+            var number = $(roomList[my_room_view.uuid].domElements.room_number).text();
+            console.log(number);
+            $("#divRoomNumber").text(number);
+      }else{
+            //Our room must be in race. So dont show any room number.
+            $("#divRoomNumber").text("");
+      }
+
+      $('#divRoomName').text(room_view.name);
+      var driver_no = 0;
+      for(var driver_uuid in room_view.drivers){
+            driver_no++;
+            $('#divDriverUsername' + driver_no).text(room_view.drivers[driver_uuid].username);
+            $('#divDriverRoomStatus' + driver_no).removeClass().addClass(room_view.drivers[driver_uuid].status == Enum_Driver_Room_Status.OFFLINE ? "offline" : room_view.drivers[driver_uuid].status == Enum_Driver_Room_Status.READY ? "ready" : "not-ready");
+            $('#divDriverBronzTrophy' + driver_no).text(room_view.drivers[driver_uuid].bronze_medal);
+            $('#divDriverSilverTrophy' + driver_no).text(room_view.drivers[driver_uuid].silver_medal);
+            $('#divDriverGoldTrophy' + driver_no).text(room_view.drivers[driver_uuid].gold_medal);
+            $('#divDriverTrophy' + driver_no).css('visibility', 'visible');
+      }
+      for(var i=driver_no+1;i<=4;i++){
+            //Make empty remaining slots
+            $('#divDriverUsername' + i).text("empty");
+            $('#divDriverRoomStatus' + i).removeClass().addClass("offline");
+            $('#divDriverBronzTrophy' + i).text(0);
+            $('#divDriverSilverTrophy' + i).text(0);
+            $('#divDriverGoldTrophy' + i).text(0);
+
+            $('#divDriverTrophy' + i).css('visibility', 'collapse');
+      }
+      $('#divRoom').show();
+
+}
+
+function SetReady() {
+      if($('#btnReady').text() == "I'm Ready"){
+            //we tell web server that we are ready to race.
+            socket.emit("ready", function (data) {
+                  if (data.success) {
+                        //set "Set Ready" button to "Not Ready"
+                        //TODO: Change button's color
+                        $('#btnReady').text("I'm Not Ready");
+                  } else {
+      
+                  }
+            });
+      }else{
+            //we tell web server that we are ready to race.
+            socket.emit("notready", function (data) {
+                  if (data.success) {
+                        //set "Set Not Ready" button to "I'm Ready"
+                        //TODO: Change button's color
+                        $('#btnReady').text("I'm Ready");
+                  } else {
+
+                  }
+            });
+      }
 }
 
 function Register(u, p, e) {
@@ -235,8 +650,9 @@ function Logout() {
                   }
             }
       });
-      localStorage.removeItem("token"); //Even log out fails, we log out from here anyways.
+      localStorage.removeItem("token"); //Even if log out fails, we log out from here anyways.
       //TODO: And do some other stuff.
+      SwitchToLoggedOutView();
 }
 
 function Authenticate(u, p) {
@@ -253,13 +669,40 @@ function Authenticate(u, p) {
       }
 }
 
+function UpdateDriverView(driver){
+      $('#divUsername').text(driver.username);
+      $('#divCoin').text(driver.coin);
+      $('#divGoldTrophy').text(driver.gold_medal);
+      $('#divSilverTrophy').text(driver.silver_medal);
+      $('#divBronzTrophy').text(driver.bronze_medal);
+      $('.premium').hide();
+      $('.profile').show();
+      $('#divTrophy').show();
+      $('#modalLogin').modal('hide');
+      $('#modalRegister').modal('hide');
+}
+
+function SwitchToLoggedOutView(){
+      $('.premium').show();
+      $('.profile').hide();
+      $('#divTrophy').hide();
+      $('#divRoom').hide();
+}
+
 function onAuthenticate(data) {
       console.log("Are we authenticated? -> ");
       console.log(data);
       if (data.success) {
             driver = data.driver;
             localStorage.setItem("token", data.token);
+            UpdateDriverView(driver);
+            if(!driver.in_room){
+                  $('#divRoom').hide();
+                  room_view = null;
+            }
       } else {
+            //remove token from the local storage
+            localStorage.removeItem("token");
             //TODO: Check different reasons and do something about it.
             switch (data.reason) {
                   case Enum_Callback_Reason.ALREADY_LOGGED_IN:
@@ -270,8 +713,6 @@ function onAuthenticate(data) {
                         break;
                   case Enum_Callback_Reason.TOKEN_EXPIRED:
                         console.log("TOKEN_EXPIRED");
-                        //remove token from the local storage
-                        localStorage.removeItem("token");
                         break;
                   case Enum_Callback_Reason.WRONG_CREDENTIALS:
                         console.log("WRONG_CREDENTIALS");
@@ -283,8 +724,8 @@ function onAuthenticate(data) {
       }
 }
 
-function CreateRoom(room_name, track_id) {
-      socket.emit("create-room", { room_name, track_id }, (data) => {
+function CreateRoom(name, password, track_id) {
+      socket.emit("create-room", { name, password, track_id }, (data) => {
             console.log("Did we got a new room? -> ");
             console.log(data);
             if (data.success == false) {
@@ -292,12 +733,15 @@ function CreateRoom(room_name, track_id) {
                         case Enum_Callback_Reason.MISSING_INFO:
                               break;
                   }
+            }else{
+                  ProcessRoomSnapshot(data.room_view);
             }
       });
 }
 
-function JoinRoom(roomId) {
-      socket.emit("join-room", { room_id: roomId }, (data) => {
+
+function JoinRoom(room_id) {
+      socket.emit("join-room", { room_id }, (data) => {
             console.log("Did we join to the room? -> ");
             console.log(data);
             if (data.success == false) {
@@ -305,6 +749,22 @@ function JoinRoom(roomId) {
                         case Enum_Callback_Reason.MISSING_INFO:
                               break;
                   }
+            }else{
+                  ProcessRoomSnapshot(data.room_view);
+            }
+      });
+}
+
+function LeaveRoom() {
+      socket.emit("leave-room", {}, (data) => {
+            console.log("Did we leave the room? -> ");
+            console.log(data);
+            if (data.success == false) {
+                  console.log("We have a problem.");
+            }else{
+                  //Hide room view.
+                  $('#divRoom').hide();
+                  showJoinButtons();
             }
       });
 }
@@ -521,26 +981,49 @@ var WebRTCConnection = new function () {
 };
 
 
-
+function AddVREventListeners(){
+      window.addEventListener('vrdisplayconnect', function() {
+            info.textContent = 'Display connected.';
+            reportDisplays();
+      });
+}
 
 
 var StartVR = function () {
+
       var scene = new THREE.Scene();
       var fov = 90;
-      var aspect = window.innerWidth / window.innerHeight;
+      var aspectRatio = window.innerWidth / window.innerHeight;
       var near = 1;
       var far = 1000;
-      var camera = new THREE.PerspectiveCamera(fov, aspect, near, far);
+      var width = 1000, height = 800;
+      var camera = new THREE.PerspectiveCamera(fov, aspectRatio, near, far);
       camera.position.set(0, 0, 0);
       camera.layers.enable(1); // render left view when no stereo available
 
       var renderer = new THREE.WebGLRenderer();
-      renderer.setPixelRatio(window.devicePixelRatio);
-      renderer.setSize(window.innerWidth, window.innerHeight);
       renderer.vr.enabled = true;
       renderer.vr.userHeight = 0; // TOFIX
-      document.body.appendChild(renderer.domElement);
-      document.body.appendChild(WEBVR.createButton(renderer));
+      renderer.setPixelRatio(window.devicePixelRatio);
+      $("#threejsContainer").height($("#threejsContainer").width() / aspectRatio);
+      renderer.setSize($("#threejsContainer").width(), $("#threejsContainer").height());
+      $("#threejsContainer").append(renderer.domElement);
+      $("#threejsContainer").append(WEBVR.createButton(renderer));
+
+      $("#btnFullscreen").css({top: $("#threejsContainer").height() - $("#btnFullscreen").height(), left: $("#threejsContainer").width() - $("#btnFullscreen").width()});
+
+      $("#btnFullscreen").on("click", function(){
+            if(renderer.domElement.requestFullscreen)
+                  renderer.domElement.requestFullscreen();
+            else if(renderer.domElement.webkitRequestFullScreen)
+                  renderer.domElement.webkitRequestFullScreen();
+      });
+      
+
+      $( window ).resize(function() {
+            $("#threejsContainer").height($("#threejsContainer").width() / aspectRatio);
+            renderer.setSize($("#threejsContainer").width(), $("#threejsContainer").height());
+      });
 
       var videoleft = document.getElementById('remoteViewLeft');
       //videoleft.muted = true;
@@ -701,17 +1184,14 @@ var StartVR = function () {
       meshright.layers.set(2); // display in right eye only
       scene.add(meshright);
 
-      var controls = new THREE.OrbitControls(camera);
-      controls.enableDamping = true;
-      controls.dampingFactor = 2.0;
-      controls.enableZoom = false;
-      controls.maxDistance = 0;
-      controls.minDistance = 0.1;
+      // var controls = new THREE.OrbitControls(camera);
+      // controls.enableDamping = true;
+      // controls.dampingFactor = 2.0;
+      // controls.enableZoom = false;
+      // controls.maxDistance = 0;
+      // controls.minDistance = 0.1;
 
-
-      renderer.vr.enabled = true;
-      document.body.appendChild(WEBVR.createButton(renderer));
-
+      
       setInterval(function () {
             if (videoleft.readyState >= videoleft.HAVE_CURRENT_DATA) {
                   textureleft.needsUpdate = true;
@@ -719,8 +1199,7 @@ var StartVR = function () {
             if (videoright.readyState >= videoright.HAVE_CURRENT_DATA) {
                   textureright.needsUpdate = true;
             }
-      },
-            1000 / 24);
+      }, 1000 / 24);
 
       (function renderLoop() {
             //renderer.animate(update);
@@ -729,45 +1208,44 @@ var StartVR = function () {
       })();
 
 
-      
-var vr, lastPose;
+            
+      var vr, lastPose;
 
-window.addEventListener('vrdisplayconnect',
-      function () {
+      window.addEventListener('vrdisplayconnect', function () {
             navigator.getVRDisplays().then(function (displays) {
                   console.log("vrdisplayconnect");
                   vr = displays[0];
                   getPose();
             });
       });
-window.addEventListener('vrdisplaydisconnect',
-      function () {
+            
+      window.addEventListener('vrdisplaydisconnect', function () {
             console.log("vrdisplaydisconnect");
             vr = null;
       });
 
-function getPose() {
-      setTimeout(function () {
-            if(!vr)
-                  return;
-            if (vr.getPose().orientation == null) {
+      function getPose() {
+            setTimeout(function () {
+                  if(!vr)
+                        return;
+                  if (vr.getPose().orientation == null) {
+                        getPose();
+                        return;
+                  }
+
+                  var pose = vr.getPose().orientation[1] * (-vr.getPose().orientation[3] / Math.abs(vr.getPose().orientation[3]));
+
+                  var currentPose = Math.floor(pose * 50 + 50);
+                  if (lastPose != currentPose)
+                        //Send it to local server.
+                        WebRTCConnection.sendDataChannelMessage("2" + Math.floor(-pose * 50 + 50));
+                        rotateGeometries(pose * Math.PI / 2 * 1.4);
+
+                  lastPose = currentPose;
+
                   getPose();
-                  return;
-            }
-
-            var pose = vr.getPose().orientation[1] * (-vr.getPose().orientation[3] / Math.abs(vr.getPose().orientation[3]));
-
-            var currentPose = Math.floor(pose * 50 + 50);
-            if (lastPose != currentPose)
-                  //Send it to local server.
-                  WebRTCConnection.sendDataChannelMessage("2" + Math.floor(-pose * 50 + 50));
-                  rotateGeometries(pose * Math.PI / 2 * 1.4);
-
-            lastPose = currentPose;
-
-            getPose();
-      }, 100);
-}
+            }, 100);
+      }
 
       function rotateGeometries(angle){
             meshleft.rotation.set(meshleft.rotation.x, -angle, meshleft.rotation.z);
@@ -779,4 +1257,5 @@ function getPose() {
 window.onload = function () {
       StartSocket();
       StartVR();
-}
+      AddButtonEvents();
+};

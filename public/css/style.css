@@ -71,7 +71,7 @@ input[type=radio]:checked:before { display: inline-block; font-family: FontAweso
 .header .profile .dropdown-menu { border-radius: 0;margin: 0;width: 339px;border: 0;left: inherit;right: 0;} 
 .header .profile .dropdown-menu a { font-size: 13px; color: #292b2c;}
 
-.award { position: relative; padding: 4px 0 2px; color: #f9a602; font-size: 26px; text-align: center; background: #333; border-radius: 20px; margin: 7px auto; width: 300px; } 
+.award { display: none; position: relative; padding: 4px 0 2px; color: #f9a602; font-size: 26px; text-align: center; background: #333; border-radius: 20px; margin: 7px auto; width: 300px; } 
 .award ul li { display: inline-block;margin-right: 10px; }
 .award ul li span { display: inline-block;width: 8px;font-size: 12px;font-style: normal; }
 .award ul li:nth-child(1) i { color: #f9a602 }
@@ -95,7 +95,7 @@ input[type=radio]:checked:before { display: inline-block; font-family: FontAweso
 .video-camera select { display: inline-block;background: transparent;border: transparent;height: 24px; }
 
 /* Track Maps */
-.track-maps { position: relative;margin: 20px 20px 0;}
+.track-maps { display: none; position: relative;margin: 20px 20px 0;}
 .track-maps .owl-item {position: relative;  background: #424346;padding: 10px; height: 100px;border: 1px solid #fff;border-right: 0;display: table; overflow: hidden;}
 .track-maps .owl-item:last-child { border-right: 1px solid #fff; }
 .track-maps .owl-item a { position: relative;display: table-cell;width: 100%;vertical-align: middle;background: #fff;text-align: center;}
@@ -130,14 +130,15 @@ input[type=radio]:checked:before { display: inline-block; font-family: FontAweso
 .sidebar-left .sid2 .room-line .rm2 span i.passive { color: #424346; }
 .sidebar-left .sid2 .room-line .rm2 a.btn { position: absolute; right: 0;bottom: -16px;  height: 24px; width: 64px; background: #f87903; border: 0; border-radius: 2px; color: #ffffff; padding: 3px 4px; font-size: 13px; line-height: 17px; } 
 
-.sidebar-left .sid2 .room-unpin { position: relative;min-height: 213px;background: #262626;   }
+.sidebar-left .sid2 .room-unpin { display: none; position: relative;min-height: 213px;background: #262626;   }
 .sidebar-left .sid2 .room-unpin h1 { font-size: 14px;margin: 0;padding: 10px ;background: #333333;}
 .sidebar-left .sid2 .room-unpin h1 span { display: inline-block; color: #ffffff;text-align: center; position: absolute; right: 10px; top: 0; font-weight: bold; font-size: 28px; background: #262626; height: 37px; line-height: 37px; padding: 0 10px; width: 44px; }
 .sidebar-left .sid2 .room-unpin div { position: relative;z-index: 9;}
 .sidebar-left .sid2 .room-unpin .rm1 { position: relative;float: left;width: 50%;padding: 10px; border-bottom: 1px solid #333; border-right: 1px solid #333;overflow: hidden;}
 .sidebar-left .sid2 .room-unpin .rm1 h3 { margin: 0 0 10px;font-size: 13px; color: #8e98a7;}
 .sidebar-left .sid2 .room-unpin .rm1 span {position: absolute;right: 10px;top: 10px;  display: block; width: 16px;height: 16px;border-radius: 20px;background: #ffffff;}
-.sidebar-left .sid2 .room-unpin .rm1 span.online { background: #80b440;}
+.sidebar-left .sid2 .room-unpin .rm1 span.ready { background: #80b440;}
+.sidebar-left .sid2 .room-unpin .rm1 span.not-ready { background: #CFB53B;}
 .sidebar-left .sid2 .room-unpin .rm1 span.offline { background: #424346;}
 .sidebar-left .sid2 .room-unpin .rm1 .trophy { color: #CFB53B; font-size: 18px; }
 .sidebar-left .sid2 .room-unpin .rm1 .trophy ul li { display: inline-block;margin-right: 10px; }
