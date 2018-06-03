@@ -149,6 +149,13 @@ var RoomItem = function(room_public_view){
       
             $(this.domElements.room_name).text(room_public_view.name);
 
+            if(room_public_view.is_locked){
+                  var join_button_lock = document.createElement('div');
+                  $(join_button_lock).addClass("fa fa-lock");
+                  $(join_button_lock).attr("style", "margin-left: 6px;");
+                  $(this.domElements.join_button).append(join_button_lock);
+            }
+
             $(this.domElements.join_button).attr('onClick','JoinRoom("' + room_public_view.uuid + '")');
             //this.domElements.join_button.addEventListener("click", function(){ JoinRoom(room_public_view.uuid); });
             //$(this.domElements.join_button).on("click", function(){ JoinRoom(room_public_view.uuid); });
@@ -162,7 +169,7 @@ var RoomItem = function(room_public_view){
       return this;
 };
 
-function SetRoomNumbers(){
+function ShowRoomsOfActiveTrackInOrder(){
       var roomList = activeTrack.rooms;
       var roomDomContainerListInOrder = [];
       for(var r1 in roomList){
@@ -178,12 +185,17 @@ function SetRoomNumbers(){
             }
             roomDomContainerListInOrder[number] = roomList[r1].domElements.container;
       }
+      $("#divRoomList").empty();
       for(var r=0;r<roomDomContainerListInOrder.length;r++){
             if(roomDomContainerListInOrder[r]){
-                  $(roomDomContainerListInOrder[r]).remove();
                   $("#divRoomList").append(roomDomContainerListInOrder[r]);
             }
       }
+      
+      if(my_room_view)
+            hideJoinButtons();
+      else
+            showJoinButtons();
 }
 
 function hideJoinButtons(){
@@ -256,11 +268,7 @@ function StartSocket() {
 
             activeTrack = trackList[track_id];
 
-            $("#divRoomList").empty();
-            for(var r in activeTrack.rooms){
-                  $("#divRoomList").append(activeTrack.rooms[r].domElements.container);
-            }
-            SetRoomNumbers();
+            ShowRoomsOfActiveTrackInOrder();
 
             //Empty chat area first.
             $('#divGlobalChat').empty();
@@ -475,8 +483,7 @@ function StartSocket() {
             var roomItem = onNewRoomView(data.room_public_view);
             trackList[data.room_public_view.track_id].rooms[data.room_public_view.uuid] = roomItem;
             if(activeTrack.uuid == data.room_public_view.track_id){
-                  $("#divRoomList").append(roomItem.domElements.container);
-                  SetRoomNumbers();
+                  ShowRoomsOfActiveTrackInOrder();
             }
       };
       UpdateHandler[UpdateTypes.ROOM_CLOSED] = function (data) {
@@ -486,8 +493,7 @@ function StartSocket() {
             if(room){
                   delete  trackList[data.track_id].rooms[data.room_id];
                   if(activeTrack.uuid == data.track_id){
-                        $(room.domElements.container).remove();
-                        SetRoomNumbers();
+                        ShowRoomsOfActiveTrackInOrder();
                   }
             }
       };
@@ -505,9 +511,8 @@ function StartSocket() {
                   ranking: ["driver_uuid1", "driver_uuid2", "driver_uuid3", "driver_uuid4"]
                } */
 
-               $(trackList[data.room.track_id].rooms[data.room.uuid].domElements.container).remove();
                delete trackList[data.room.track_id].rooms[data.room.uuid];
-               SetRoomNumbers();
+               ShowRoomsOfActiveTrackInOrder();
       };
       UpdateHandler[UpdateTypes.ROOM_FINISHED_RACE] = function (data) {
             //show result of the race.
@@ -577,6 +582,8 @@ function AddButtonEvents(){
       });
 
       $('#btnCreateRoom').on('click', function () {
+            if($('#txtRoomName').text() == "")
+                  return;
             CreateRoom($('#txtRoomName').val(), $('#txtRoomPassword').val(), activeTrack.uuid);
             $('#modalCreateRoom').modal('hide');
       });
@@ -592,6 +599,13 @@ function AddButtonEvents(){
 
       $('#btnReady').on('click', function () {
             SetReady();
+      });
+
+      $('#btnJoinRoom').on('click', function () {
+            var password = $('#txtJoinRoomPassword').val();
+            if(password == "")
+                  return;
+            JoinRoom(roomIdToEnterPassword, password);
       });
 
       $('#btnGlobalChat').on('click', function () {
@@ -611,6 +625,25 @@ function AddButtonEvents(){
       });
       
       $('#btnSendChat').on('click', function () {
+            onSendChatClick();
+      });
+
+      $("#txtChat").keydown(function (e) {
+            if (e.keyCode === 13 && e.ctrlKey) {
+                //console.log("enterKeyDown+ctrl");
+                $(this).val(function(i,val){
+                    return val + "\n";
+                });
+                $("#txtChat").trigger("input");
+            }
+        }).keypress(function( event ) {
+            if (event.which == 13 && !event.ctrlKey) {
+               event.preventDefault();
+               onSendChatClick();
+            }
+      });
+
+      function onSendChatClick(){
             var text = $('#txtChat').val();
             if(!driver || text == "")
                   return;
@@ -630,7 +663,7 @@ function AddButtonEvents(){
             $('#txtChat').val("");
             $("#txtChat").trigger("input");
             setChatAreaHeight();
-      });
+      }
 
       $('#txtChat').on('input', function () {
             this.style.height = 'auto';
@@ -914,13 +947,18 @@ function CreateRoom(name, password, track_id) {
       });
 }
 
-
-function JoinRoom(room_id) {
+var roomIdToEnterPassword= null;
+function JoinRoom(room_id, password) {
       if(!driver){
             alert("Sign in to join rooms.");
             return;
       }
-      socket.emit("join-room", { room_id }, (data) => {
+      if(activeTrack.rooms[room_id].room_public_view.is_locked && !password){
+            roomIdToEnterPassword = room_id;
+            $('#modalRoomPassword').modal('show');
+            return;
+      }
+      socket.emit("join-room", { room_id, password }, (data) => {
             console.log("Did we join to the room? -> ");
             console.log(data);
             if (data.success == false) {
@@ -929,6 +967,7 @@ function JoinRoom(room_id) {
                               break;
                   }
             }else{
+                  $('#modalRoomPassword').modal('hide');
                   ProcessRoomSnapshot(data.room_private_view);
             }
       });

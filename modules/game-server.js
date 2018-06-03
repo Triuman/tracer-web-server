@@ -107,11 +107,12 @@ const Enum_Callback_Reason = {
       DB_ERROR: 5,
       NOT_ENOUGH_COIN: 6,
       ROOM_IS_FULL: 7,
-      SAME_USERNAME_OR_EMAIL_EXIST: 8,
-      NO_TRACK_WITH_GIVEN_ID: 9,
-      NO_ROOM_WITH_GIVEN_ID: 10,
-      DRIVER_IS_NOT_IN_A_ROOM: 11,
-      STILL_IN_RACE: 12 //If admin tries to take next room in while there is a race running on a track, we will send this reason.
+      WRONG_ROOM_PASSWORD: 8,
+      SAME_USERNAME_OR_EMAIL_EXIST: 9,
+      NO_TRACK_WITH_GIVEN_ID: 10,
+      NO_ROOM_WITH_GIVEN_ID: 11,
+      DRIVER_IS_NOT_IN_A_ROOM: 12,
+      STILL_IN_RACE: 13 //If admin tries to take next room in while there is a race running on a track, we will send this reason.
 };
 
 //DB user pass: tracerwebserver**
@@ -519,6 +520,11 @@ function main(httpServer) {
                   //Check if the room is full already.
                   if (Object.keys(ActiveRooms[data.room_id].drivers).length >= MAX_ROOM_CAPACITY) {
                         callback({ success: false, reason: Enum_Callback_Reason.ROOM_IS_FULL });
+                        return;
+                  }
+
+                  if(ActiveRooms[data.room_id].password && ActiveRooms[data.room_id].password != data.password){
+                        callback({ success: false, reason: Enum_Callback_Reason.WRONG_ROOM_PASSWORD });
                         return;
                   }
 
