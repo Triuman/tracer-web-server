@@ -1143,8 +1143,18 @@ var WebRTCConnection = new function () {
                         console.log("Data Channel Error:", error);
                   };
 
+                  var localCameraStreamDelay = 250; //ms
                   dataChannel.onmessage = function (event) {
                         console.log("Got Data Channel Message:", event.data);
+                        if(event.data[0] == "2"){
+                              //We got a camera servo control message. No we can rotate our Sphere to match the camera positions.
+                              //WebRTCConnection.sendDataChannelMessage("2" + Math.floor(-pose * 50 + 50));
+                              //We are simulating the camera latency.
+                              setTimeout(function(){
+                                    var pose = (parseInt(event.data[1] + event.data[2]) - 50) / -50;
+                                    StartVR.rotateGeometries(pose * Math.PI / 2 * 1.4);
+                              }, localCameraStreamDelay);
+                        }
                   };
 
                   dataChannel.onopen = function () {
@@ -1207,7 +1217,7 @@ function AddVREventListeners(){
 }
 
 
-var StartVR = function () {
+var StartVR = new function () {
 
       var scene = new THREE.Scene();
       var fov = 90;
@@ -1216,218 +1226,227 @@ var StartVR = function () {
       var far = 1000;
       var width = 1000, height = 800;
       var camera = new THREE.PerspectiveCamera(fov, aspectRatio, near, far);
-      camera.position.set(0, 0, 0);
-      camera.layers.enable(1); // render left view when no stereo available
+      var renderer;
+      var videoleft, textureleft;
+      var videoright, textureright;
+      var geometryleft, materialleft, meshleft;
+      var geometryright, meshright, materialright;
 
-      var renderer = new THREE.WebGLRenderer();
-      renderer.vr.enabled = true;
-      renderer.vr.userHeight = 0; // TOFIX
-      renderer.setPixelRatio(window.devicePixelRatio);
-      $("#threejsContainer").height($("#threejsContainer").width() / aspectRatio);
-      renderer.setSize($("#threejsContainer").width(), $("#threejsContainer").height());
-      $("#threejsContainer").append(renderer.domElement);
-      $("#threejsContainer").append(WEBVR.createButton(renderer));
 
-      $("#btnFullscreen").css({top: $("#threejsContainer").height() - $("#btnFullscreen").height(), left: $("#threejsContainer").width() - $("#btnFullscreen").width()});
-
-      $("#btnFullscreen").on("click", function(){
-            if(renderer.domElement.requestFullscreen)
-                  renderer.domElement.requestFullscreen();
-            else if(renderer.domElement.webkitRequestFullScreen)
-                  renderer.domElement.webkitRequestFullScreen();
-      });
+      this.init = function(){
+            camera.position.set(0, 0, 0);
+            camera.layers.enable(1); // render left view when no stereo available
       
-
-      $( window ).resize(function() {
+            renderer = new THREE.WebGLRenderer();
+            renderer.vr.enabled = true;
+            renderer.vr.userHeight = 0; // TOFIX
+            renderer.setPixelRatio(window.devicePixelRatio);
             $("#threejsContainer").height($("#threejsContainer").width() / aspectRatio);
             renderer.setSize($("#threejsContainer").width(), $("#threejsContainer").height());
-      });
-
-      var videoleft = document.getElementById('remoteViewLeft');
-      //videoleft.muted = true;
-      videoleft.setAttribute('webkit-playsinline', 'webkit-playsinline');
-      var textureleft = new THREE.Texture(videoleft);
-      textureleft.generateMipmaps = false;
-      textureleft.minFilter = THREE.NearestFilter;
-      textureleft.maxFilter = THREE.NearestFilter;
-      textureleft.format = THREE.RGBFormat;
-
-
-      var videoright = document.getElementById('remoteViewRight');
-      //videoright.muted = true;
-      videoright.setAttribute('webkit-playsinline', 'webkit-playsinline');
-      var textureright = new THREE.Texture(videoright);
-      textureright.generateMipmaps = false;
-      textureright.minFilter = THREE.NearestFilter;
-      textureright.maxFilter = THREE.NearestFilter;
-      textureright.format = THREE.RGBFormat;
-
-
-      //###################################################
-
-      var radius = 0.5; //This is the point at 180 degree on the image.
-
-
-      //###################################################
-
-      var isFacedUp = true; //if false, video is faced up.
-
-      //LEFT SIDE
-      var geometryleft = new THREE.SphereGeometry(500, 50, 50);
-
-      if (isFacedUp) {
-            var faceVertexUvsleft = geometryleft.faceVertexUvs[0];
-            for (var i = 0; i < faceVertexUvsleft.length; i++) {
-                  var uvs = faceVertexUvsleft[i];
-                  var face = geometryleft.faces[i];
-
-                  //face.color.setRGB(Math.abs(uvs[0].x), Math.abs(uvs[0].x), Math.abs(uvs[0].x));
-                  //face.color.setRGB(Math.abs(uvs[0].y), Math.abs(uvs[0].x), 1);
-                  //face.color.setRGB(Math.abs(face.normal.x), Math.abs(face.normal.x), Math.abs(face.normal.x));
-                  //face.color.setRGB(Math.abs(face.normal.y), Math.abs(face.normal.y), Math.abs(face.normal.y));
-                  //face.color.setRGB(Math.abs(face.normal.z), Math.abs(face.normal.z), Math.abs(face.normal.z));
-
-                  for (var j = 0; j < 3; j++) {
-                        var x = face.vertexNormals[j].x;
-                        var y = face.vertexNormals[j].y;
-                        var z = face.vertexNormals[j].z;
-
-                        var currentRadius = (1 - y) * radius; //(1 - y) goes from 0 to 2
-
-
-                        var correction = (x === 0 && z === 0) ? 1 : Math.acos(y) / (Math.PI / 2) / Math.sqrt(x * x + z * z);
-                        //correction = 1;
-                        //console.log(correction);
-
-                        if ((1 - y) < 1) {
-                              uvs[j].x = x * 0.5 * radius * correction + 0.5;
-                              uvs[j].y = z * 0.5 * radius * correction + 0.5;
-                        } else {
-                              var radiusOfXZ = Math.sqrt(x * x + z * z);
-                              var newRadius = 1 + 1 - radiusOfXZ;
-                              var newX = x * newRadius / radiusOfXZ;
-                              var newZ = z * newRadius / radiusOfXZ;
-
-                              uvs[j].x = x * 0.5 * radius * correction + (newX - x) * 0.5 * radius + 0.5;
-                              uvs[j].y = z * 0.5 * radius * correction + (newZ - z) * 0.5 * radius + 0.5;
-
-                              //uvs[j].x = 0;
-                              //uvs[j].y = 0;
-                        }
-
-                        //if (currentRadius > 1) {
-                        //    uvs[j].x = 0;
-                        //    uvs[j].y = 0;
-                        //} else if (currentRadius > radius) {
-                        //    console.log(x, (x / Math.abs(x) - x + x / Math.abs(x)) * 0.5 * radius + 0.5);
-                        //}
-
-                  }
-            }
-      }
-
-      geometryleft.rotateX(-Math.PI / 2);
-      var materialleft = new THREE.MeshBasicMaterial({ map: textureleft });
-      materialleft.side = THREE.BackSide;
-      var meshleft = new THREE.Mesh(geometryleft, materialleft);
-      //mesh.rotation.x = 360 * Math.PI / 180;
-      //mesh.rotation.y = 0 * Math.PI / 180;
-      //mesh.rotation.z = 180 * Math.PI / 180;
-      meshleft.layers.set(1); // display in left eye only
-      scene.add(meshleft);
-
-      //RIGHT SIDE
-      var geometryright = new THREE.SphereGeometry(500, 50, 50);
-
-      if (isFacedUp) {
-            var faceVertexUvsright = geometryright.faceVertexUvs[0];
-            for (var i = 0; i < faceVertexUvsright.length; i++) {
-                  var uvs = faceVertexUvsright[i];
-                  var face = geometryright.faces[i];
-
-                  //face.color.setRGB(Math.abs(uvs[0].x), Math.abs(uvs[0].x), Math.abs(uvs[0].x));
-                  //face.color.setRGB(Math.abs(uvs[0].y), Math.abs(uvs[0].x), 1);
-                  //face.color.setRGB(Math.abs(face.normal.x), Math.abs(face.normal.x), Math.abs(face.normal.x));
-                  //face.color.setRGB(Math.abs(face.normal.y), Math.abs(face.normal.y), Math.abs(face.normal.y));
-                  //face.color.setRGB(Math.abs(face.normal.z), Math.abs(face.normal.z), Math.abs(face.normal.z));
-
-                  for (var j = 0; j < 3; j++) {
-                        var x = face.vertexNormals[j].x;
-                        var y = face.vertexNormals[j].y;
-                        var z = face.vertexNormals[j].z;
-
-                        var currentRadius = (1 - y) * radius; //(1 - y) goes from 0 to 2
-
-
-                        var correction = (x === 0 && z === 0)
-                              ? 1
-                              : Math.acos(y) / (Math.PI / 2) / Math.sqrt(x * x + z * z);
-                        //correction = 1;
-                        //console.log(correction);
-
-                        if ((1 - y) < 1) {
-                              uvs[j].x = x * 0.5 * radius * correction + 0.5;
-                              uvs[j].y = z * 0.5 * radius * correction + 0.5;
-                        } else {
-                              var radiusOfXZ = Math.sqrt(x * x + z * z);
-                              var newRadius = 1 + 1 - radiusOfXZ;
-                              var newX = x * newRadius / radiusOfXZ;
-                              var newZ = z * newRadius / radiusOfXZ;
-
-                              uvs[j].x = x * 0.5 * radius * correction + (newX - x) * 0.5 * radius + 0.5;
-                              uvs[j].y = z * 0.5 * radius * correction + (newZ - z) * 0.5 * radius + 0.5;
-
-                              //uvs[j].x = 0;
-                              //uvs[j].y = 0;
-                        }
-
-                        //if (currentRadius > 1) {
-                        //    uvs[j].x = 0;
-                        //    uvs[j].y = 0;
-                        //} else if (currentRadius > radius) {
-                        //    console.log(x, (x / Math.abs(x) - x + x / Math.abs(x)) * 0.5 * radius + 0.5);
-                        //}
-
-                  }
-            }
-      }
-
-      geometryright.rotateX(-Math.PI / 2);
-      var materialright = new THREE.MeshBasicMaterial({ map: textureright });
-      materialright.side = THREE.BackSide;
-      var meshright = new THREE.Mesh(geometryright, materialright);
-      //mesh.rotation.x = 360 * Math.PI / 180;
-      //mesh.rotation.y = 0 * Math.PI / 180;
-      //mesh.rotation.z = 180 * Math.PI / 180;
-      meshright.layers.set(2); // display in right eye only
-      scene.add(meshright);
-
-      // var controls = new THREE.OrbitControls(camera);
-      // controls.enableDamping = true;
-      // controls.dampingFactor = 2.0;
-      // controls.enableZoom = false;
-      // controls.maxDistance = 0;
-      // controls.minDistance = 0.1;
-
+            $("#threejsContainer").append(renderer.domElement);
+            $("#threejsContainer").append(WEBVR.createButton(renderer));
+            $("#threejsContainer").show();
       
-      setInterval(function () {
-            if (videoleft.readyState >= videoleft.HAVE_CURRENT_DATA) {
-                  textureleft.needsUpdate = true;
-            }
-            if (videoright.readyState >= videoright.HAVE_CURRENT_DATA) {
-                  textureright.needsUpdate = true;
-            }
-      }, 1000 / 24);
-
-      (function renderLoop() {
-            //renderer.animate(update);
-            requestAnimationFrame(renderLoop);
-            renderer.render(scene, camera);
-      })();
-
-
+            $("#btnFullscreen").css({top: $("#threejsContainer").height() - $("#btnFullscreen").height(), left: $("#threejsContainer").width() - $("#btnFullscreen").width()});
+      
+            $("#btnFullscreen").on("click", function(){
+                  if(renderer.domElement.requestFullscreen)
+                        renderer.domElement.requestFullscreen();
+                  else if(renderer.domElement.webkitRequestFullScreen)
+                        renderer.domElement.webkitRequestFullScreen();
+            });
             
-      var vr, lastPose;
+      
+            $( window ).resize(function() {
+                  $("#threejsContainer").height($("#threejsContainer").width() / aspectRatio);
+                  renderer.setSize($("#threejsContainer").width(), $("#threejsContainer").height());
+            });
+      
+            videoleft = document.getElementById('remoteViewLeft');
+            //videoleft.muted = true;
+            videoleft.setAttribute('webkit-playsinline', 'webkit-playsinline');
+            textureleft = new THREE.Texture(videoleft);
+            textureleft.generateMipmaps = false;
+            textureleft.minFilter = THREE.NearestFilter;
+            textureleft.maxFilter = THREE.NearestFilter;
+            textureleft.format = THREE.RGBFormat;
+      
+      
+            videoright = document.getElementById('remoteViewRight');
+            //videoright.muted = true;
+            videoright.setAttribute('webkit-playsinline', 'webkit-playsinline');
+            textureright = new THREE.Texture(videoright);
+            textureright.generateMipmaps = false;
+            textureright.minFilter = THREE.NearestFilter;
+            textureright.maxFilter = THREE.NearestFilter;
+            textureright.format = THREE.RGBFormat;
+      
+      
+            //###################################################
+      
+            var radius = 0.5; //This is the point at 180 degree on the image.
+      
+      
+            //###################################################
+      
+            var isFacedUp = true; //if false, video is faced up.
+      
+            //LEFT SIDE
+            geometryleft = new THREE.SphereGeometry(500, 50, 50);
+      
+            if (isFacedUp) {
+                  var faceVertexUvsleft = geometryleft.faceVertexUvs[0];
+                  for (var i = 0; i < faceVertexUvsleft.length; i++) {
+                        var uvs = faceVertexUvsleft[i];
+                        var face = geometryleft.faces[i];
+      
+                        //face.color.setRGB(Math.abs(uvs[0].x), Math.abs(uvs[0].x), Math.abs(uvs[0].x));
+                        //face.color.setRGB(Math.abs(uvs[0].y), Math.abs(uvs[0].x), 1);
+                        //face.color.setRGB(Math.abs(face.normal.x), Math.abs(face.normal.x), Math.abs(face.normal.x));
+                        //face.color.setRGB(Math.abs(face.normal.y), Math.abs(face.normal.y), Math.abs(face.normal.y));
+                        //face.color.setRGB(Math.abs(face.normal.z), Math.abs(face.normal.z), Math.abs(face.normal.z));
+      
+                        for (var j = 0; j < 3; j++) {
+                              var x = face.vertexNormals[j].x;
+                              var y = face.vertexNormals[j].y;
+                              var z = face.vertexNormals[j].z;
+      
+                              var currentRadius = (1 - y) * radius; //(1 - y) goes from 0 to 2
+      
+      
+                              var correction = (x === 0 && z === 0) ? 1 : Math.acos(y) / (Math.PI / 2) / Math.sqrt(x * x + z * z);
+                              //correction = 1;
+                              //console.log(correction);
+      
+                              if ((1 - y) < 1) {
+                                    uvs[j].x = x * 0.5 * radius * correction + 0.5;
+                                    uvs[j].y = z * 0.5 * radius * correction + 0.5;
+                              } else {
+                                    var radiusOfXZ = Math.sqrt(x * x + z * z);
+                                    var newRadius = 1 + 1 - radiusOfXZ;
+                                    var newX = x * newRadius / radiusOfXZ;
+                                    var newZ = z * newRadius / radiusOfXZ;
+      
+                                    uvs[j].x = x * 0.5 * radius * correction + (newX - x) * 0.5 * radius + 0.5;
+                                    uvs[j].y = z * 0.5 * radius * correction + (newZ - z) * 0.5 * radius + 0.5;
+      
+                                    //uvs[j].x = 0;
+                                    //uvs[j].y = 0;
+                              }
+      
+                              //if (currentRadius > 1) {
+                              //    uvs[j].x = 0;
+                              //    uvs[j].y = 0;
+                              //} else if (currentRadius > radius) {
+                              //    console.log(x, (x / Math.abs(x) - x + x / Math.abs(x)) * 0.5 * radius + 0.5);
+                              //}
+      
+                        }
+                  }
+            }
+      
+            geometryleft.rotateX(-Math.PI / 2);
+            materialleft = new THREE.MeshBasicMaterial({ map: textureleft });
+            materialleft.side = THREE.BackSide;
+            meshleft = new THREE.Mesh(geometryleft, materialleft);
+            //mesh.rotation.x = 360 * Math.PI / 180;
+            //mesh.rotation.y = 0 * Math.PI / 180;
+            //mesh.rotation.z = 180 * Math.PI / 180;
+            meshleft.layers.set(1); // display in left eye only
+            scene.add(meshleft);
+      
+            //RIGHT SIDE
+            geometryright = new THREE.SphereGeometry(500, 50, 50);
+      
+            if (isFacedUp) {
+                  var faceVertexUvsright = geometryright.faceVertexUvs[0];
+                  for (var i = 0; i < faceVertexUvsright.length; i++) {
+                        var uvs = faceVertexUvsright[i];
+                        var face = geometryright.faces[i];
+      
+                        //face.color.setRGB(Math.abs(uvs[0].x), Math.abs(uvs[0].x), Math.abs(uvs[0].x));
+                        //face.color.setRGB(Math.abs(uvs[0].y), Math.abs(uvs[0].x), 1);
+                        //face.color.setRGB(Math.abs(face.normal.x), Math.abs(face.normal.x), Math.abs(face.normal.x));
+                        //face.color.setRGB(Math.abs(face.normal.y), Math.abs(face.normal.y), Math.abs(face.normal.y));
+                        //face.color.setRGB(Math.abs(face.normal.z), Math.abs(face.normal.z), Math.abs(face.normal.z));
+      
+                        for (var j = 0; j < 3; j++) {
+                              var x = face.vertexNormals[j].x;
+                              var y = face.vertexNormals[j].y;
+                              var z = face.vertexNormals[j].z;
+      
+                              var currentRadius = (1 - y) * radius; //(1 - y) goes from 0 to 2
+      
+      
+                              var correction = (x === 0 && z === 0)
+                                    ? 1
+                                    : Math.acos(y) / (Math.PI / 2) / Math.sqrt(x * x + z * z);
+                              //correction = 1;
+                              //console.log(correction);
+      
+                              if ((1 - y) < 1) {
+                                    uvs[j].x = x * 0.5 * radius * correction + 0.5;
+                                    uvs[j].y = z * 0.5 * radius * correction + 0.5;
+                              } else {
+                                    var radiusOfXZ = Math.sqrt(x * x + z * z);
+                                    var newRadius = 1 + 1 - radiusOfXZ;
+                                    var newX = x * newRadius / radiusOfXZ;
+                                    var newZ = z * newRadius / radiusOfXZ;
+      
+                                    uvs[j].x = x * 0.5 * radius * correction + (newX - x) * 0.5 * radius + 0.5;
+                                    uvs[j].y = z * 0.5 * radius * correction + (newZ - z) * 0.5 * radius + 0.5;
+      
+                                    //uvs[j].x = 0;
+                                    //uvs[j].y = 0;
+                              }
+      
+                              //if (currentRadius > 1) {
+                              //    uvs[j].x = 0;
+                              //    uvs[j].y = 0;
+                              //} else if (currentRadius > radius) {
+                              //    console.log(x, (x / Math.abs(x) - x + x / Math.abs(x)) * 0.5 * radius + 0.5);
+                              //}
+      
+                        }
+                  }
+            }
+      
+            geometryright.rotateX(-Math.PI / 2);
+            materialright = new THREE.MeshBasicMaterial({ map: textureright });
+            materialright.side = THREE.BackSide;
+            meshright = new THREE.Mesh(geometryright, materialright);
+            //mesh.rotation.x = 360 * Math.PI / 180;
+            //mesh.rotation.y = 0 * Math.PI / 180;
+            //mesh.rotation.z = 180 * Math.PI / 180;
+            meshright.layers.set(2); // display in right eye only
+            scene.add(meshright);
+      
+            // var controls = new THREE.OrbitControls(camera);
+            // controls.enableDamping = true;
+            // controls.dampingFactor = 2.0;
+            // controls.enableZoom = false;
+            // controls.maxDistance = 0;
+            // controls.minDistance = 0.1;
+      
+            
+            setInterval(function () {
+                  if (videoleft.readyState >= videoleft.HAVE_CURRENT_DATA) {
+                        textureleft.needsUpdate = true;
+                  }
+                  if (videoright.readyState >= videoright.HAVE_CURRENT_DATA) {
+                        textureright.needsUpdate = true;
+                  }
+            }, 1000 / 24);
+      
+            (function renderLoop() {
+                  //renderer.animate(update);
+                  requestAnimationFrame(renderLoop);
+                  renderer.render(scene, camera);
+            })();
+      
+      };
+            
+      var vr, lastPose = 0, minPoseDifference = 20, minPoseValue = 10, maxPoseValue = 90;
 
       window.addEventListener('vrdisplayconnect', function () {
             navigator.getVRDisplays().then(function (displays) {
@@ -1453,27 +1472,31 @@ var StartVR = function () {
 
                   var pose = vr.getPose().orientation[1] * (-vr.getPose().orientation[3] / Math.abs(vr.getPose().orientation[3]));
 
-                  var currentPose = Math.floor(pose * 50 + 50);
-                  if (lastPose != currentPose)
-                        //Send it to local server.
-                        WebRTCConnection.sendDataChannelMessage("2" + Math.floor(-pose * 50 + 50));
-                        rotateGeometries(pose * Math.PI / 2 * 1.4);
-
-                  lastPose = currentPose;
-
+                  var currentPose = Math.floor(-pose * 50 + 50);
+                  //Send it to local server if difference is bigger than some value.
+                  if(Math.abs(lastPose - currentPose) > minPoseDifference){
+                        //Camera servo will not return if value is lower than 10 or bigger than 90.
+                        if(currentPose <= maxPoseValue)
+                              currentPose = maxPoseValue;
+                        else if(currentPose >= minPoseValue)
+                              currentPose = minPoseValue;
+                        WebRTCConnection.sendDataChannelMessage("2" + currentPose);
+                        lastPose = currentPose;
+                  }
                   getPose();
             }, 100);
       }
 
-      function rotateGeometries(angle){
+      this.rotateGeometries = function(angle){
             meshleft.rotation.set(meshleft.rotation.x, -angle, meshleft.rotation.z);
             meshright.rotation.set(meshright.rotation.x, -angle, meshright.rotation.z);
       }
     
+      return this;
 };
 
 window.onload = function () {
       StartSocket();
-      StartVR();
+      StartVR.init();
       AddButtonEvents();
 };
