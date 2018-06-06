@@ -14,11 +14,13 @@ const Enum_Callback_Reason = {
       DB_ERROR: 5,
       NOT_ENOUGH_COIN: 6,
       ROOM_IS_FULL: 7,
-      SAME_USERNAME_OR_EMAIL_EXIST: 8,
-      NO_TRACK_WITH_GIVEN_ID: 9,
-      NO_ROOM_WITH_GIVEN_ID: 10,
-      DRIVER_IS_NOT_IN_A_ROOM: 11,
-      STILL_IN_RACE: 12 //If admin tries to take next room in while there is a race running on a track, we will send this reason.
+      WRONG_ROOM_PASSWORD: 8,
+      SAME_USERNAME_OR_EMAIL_EXIST: 9,
+      NO_TRACK_WITH_GIVEN_ID: 10,
+      NO_ROOM_WITH_GIVEN_ID: 11,
+      DRIVER_IS_NOT_IN_A_ROOM: 12,
+      STILL_IN_RACE: 13, //If admin tries to take next room in while there is a race running on a track, we will send this reason.
+      NO_READY_ROOM_IN_QUEUE: 14
 };
 
 const Enum_Driver_Room_Status = {

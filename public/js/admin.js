@@ -1,3 +1,45 @@
+"use strict";
+
+//Callback fail reasons
+const Enum_Callback_Reason = {
+      ALREADY_LOGGED_IN: 0,
+      NOT_LOGGED_IN: 1,
+      TOKEN_EXPIRED: 2,
+      WRONG_CREDENTIALS: 3,
+      MISSING_INFO: 4,
+      DB_ERROR: 5,
+      NOT_ENOUGH_COIN: 6,
+      ROOM_IS_FULL: 7,
+      WRONG_ROOM_PASSWORD: 8,
+      SAME_USERNAME_OR_EMAIL_EXIST: 9,
+      NO_TRACK_WITH_GIVEN_ID: 10,
+      NO_ROOM_WITH_GIVEN_ID: 11,
+      DRIVER_IS_NOT_IN_A_ROOM: 12,
+      STILL_IN_RACE: 13, //If admin tries to take next room in while there is a race running on a track, we will send this reason.
+      NO_READY_ROOM_IN_QUEUE: 14
+};
+
+const Enum_Driver_Room_Status = {
+      OFFLINE: 0,
+      NOT_READY: 1,
+      READY: 2
+};
+
+const UpdateTypes = {
+      ROOM_CREATED: 0,
+      ROOM_CLOSED: 1,
+      ROOM_ENTERED_RACE: 2,
+      ROOM_FINISHED_RACE: 3,
+      DRIVER_JOINED_ROOM: 4,
+      DRIVER_LEFT_ROOM: 5,
+      DRIVER_GOT_ONLINE: 6,
+      DRIVER_GOT_OFFLINE: 7,
+      DRIVER_IS_READY: 8,
+      DRIVER_IS_NOT_READY: 9,
+      ADMIN_CHANGED: 10,
+      GLOBAL_CHAT: 11,
+      ROOM_CHAT: 12
+};
 
 var socket;
 

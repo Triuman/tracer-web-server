@@ -17,11 +17,11 @@ var Track = require("../models/Track");
 const ActiveRooms = {}; //Put rooms by room ids
 const ActiveDrivers = {}; //{ driver, socket, room } by driver.uuid
 const ActiveCars = {};
-const Tracks = {};
+const ActiveTracks = {};
 const DriverTimeouts = {}; //Put timeouts by driver id. When a driver disconnect while he is in a room in queue, create a timeout and keep it here. If he connects back before timeout, stop this timeout.
 const ActiveAdmins = {};
 
-const Snapshot = {}; //Keep Tracks, rooms and cars in it.
+const Snapshot = {}; //Keep ActiveTracks, rooms and cars in it.
 const PrivateRoomSnapshots = {}; //These have detailed info about the room and will be send to a driver who is in the room when reconnect.
 /*
 PrivateRoomSnapshots = {
@@ -52,9 +52,7 @@ Snapshot:
       uuid: "",
       track_id,
       drivers: {
-         "driveruuid1": {
-            username: driver.username
-         }
+         "driveruuid1": driver.username
       },
       ranking: ["driver_uuid1", "driver_uuid2", "driver_uuid3", "driver_uuid4"]
    }
@@ -97,6 +95,13 @@ const Enum_Room_Status = {
       CLOSED: 6 //if the room is CLOSED and Room.race is null, then room was closed while it was in the queue.
 };
 
+const Enum_Race_Status = {
+      NOT_STARTED: 0,
+      STARTED: 1,
+      FINISHED: 2,
+      ABORTED: 3
+};
+
 //Callback fail reasons
 const Enum_Callback_Reason = {
       ALREADY_LOGGED_IN: 0,
@@ -112,7 +117,9 @@ const Enum_Callback_Reason = {
       NO_TRACK_WITH_GIVEN_ID: 10,
       NO_ROOM_WITH_GIVEN_ID: 11,
       DRIVER_IS_NOT_IN_A_ROOM: 12,
-      STILL_IN_RACE: 13 //If admin tries to take next room in while there is a race running on a track, we will send this reason.
+      STILL_IN_RACE: 13, //If admin tries to take next room in while there is a race running on a track, we will send this reason.
+      NO_READY_ROOM_IN_QUEUE: 14,
+      NO_ROOM_IN_RACE: 15
 };
 
 //DB user pass: tracerwebserver**
@@ -142,24 +149,29 @@ module.exports.start = function (httpServer) {
                         return;
                   }
                   for (var t = 0; t < tracks.length; t++) {
-                        Tracks[tracks[t].uuid] = tracks[t];
+                        ActiveTracks[tracks[t].uuid] = tracks[t];
                         Snapshot[tracks[t].uuid] = {
                               name: tracks[t].name,
                               rooms: {},
                               chat: []
                         };
-                        Room.find({
-                              track_id: tracks[t].uuid,
-                              $and: [
-                                    { status: { $ne: Enum_Room_Status.CLOSED } }, //$ne: Not Equal
-                                    { status: { $ne: Enum_Room_Status.IN_RACE_RESULT } }
-                              ]
-                        }, function (err, rooms) {
+                        Room.find({ track_id: tracks[t].uuid, status: { $ne: Enum_Room_Status.CLOSED }}, function (err, rooms) {
                               if (err) {
                                     console.log("Error while getting Rooms from DB.-> " + err);
                                     return;
                               }
                               for (var r = 0; r < rooms.length; r++) {
+                                    //If this is the room in race, we get its onfi to snapshot room_in_race.
+                                    if(rooms[r].uuid == tracks[t].room_id_in_race){
+                                          Snapshot[tracks[t].uuid].room_in_race = {
+                                                uuid: rooms[r].uuid,
+                                                drivers: {},
+                                                ranking: []
+                                          };
+                                          for(var r=0;r<rooms[r].race.ranking.length;r++)
+                                                Snapshot[tracks[t].uuid].room_in_race.ranking[r] = rooms[r].race.ranking[r];
+                                    }
+
                                     ActiveRooms[rooms[r].uuid] = rooms[r];
                                     PrivateRoomSnapshots[rooms[r].uuid] = RoomPrivateViewModel(rooms[r]);
                                     for (var uuid in rooms[r].drivers) {
@@ -172,6 +184,10 @@ module.exports.start = function (httpServer) {
                                                       return;
                                                 }
                                                 if (driver) {
+                                                      //If this is the room in race, we get drivers info.
+                                                      if(rooms[r].uuid == tracks[t].room_id_in_race){
+                                                            Snapshot[tracks[t].uuid].room_in_race.drivers[driver.uuid] = driver.username;
+                                                      }
                                                       ActiveDrivers[driver.uuid].driver = driver;
                                                       PrivateRoomSnapshots[ActiveDrivers[driver.uuid].room.uuid].drivers[driver.uuid] = DriverPublicViewModel(driver);
                                                 }
@@ -199,7 +215,7 @@ module.exports.start = function (httpServer) {
 };
 
 function main(httpServer) {
-      localServer.start(localServerCallbacks);
+      localServer.start(localServerCallbacks, ActiveTracks);
 
       setTimeout(() => {
             //Wait for drivers in the rooms to get online. If they are not online after a while, remove them from both room and ActiveDrivers.
@@ -225,7 +241,7 @@ function main(httpServer) {
             });
 
             socket.on('global-chat', data => {
-                  if (socket.driver && Tracks[data.track_id])
+                  if (socket.driver && ActiveTracks[data.track_id])
                         UpdateManager.emitUpdate[UpdateManager.UpdateTypes.GLOBAL_CHAT](data.track_id, socket.driver.username, data.text);
             });
 
@@ -242,13 +258,13 @@ function main(httpServer) {
             socket.on('answer', (data, callback) => {
                   if (!socket.driver || !data.sdp)
                         return;
-                  localServer.sendAnswerSdp(socket.driver.uuid, data.sdp, data.isleft);
+                  localServer.sendAnswerSdp(data.track_id, socket.driver.uuid, data.sdp, data.isleft);
             });
 
             socket.on('candidate', (data, callback) => {
                   if (!socket.driver || !data.candidate)
                         return;
-                  localServer.sendCandidate(socket.driver.uuid, data.candidate, data.isleft);
+                  localServer.sendCandidate(data.track_id, socket.driver.uuid, data.candidate, data.isleft);
             });
 
             socket.on('ready', (callback) => {
@@ -445,7 +461,7 @@ function main(httpServer) {
                   }
 
                   //Check if a track with track_id exist
-                  if (!Tracks[data.track_id]) {
+                  if (!ActiveTracks[data.track_id]) {
                         callback({ success: false, reason: Enum_Callback_Reason.NO_TRACK_WITH_GIVEN_ID });
                         return;
                   }
@@ -476,7 +492,7 @@ function main(httpServer) {
                               drivers: {},
                               chat: []
                         });
-                        newRoom.drivers[driver.uuid] = { status: Enum_Driver_Room_Status.NOT_READY, controlled_car_id: null, streamed_car_id: null };
+                        newRoom.drivers[driver.uuid] = { status: Enum_Driver_Room_Status.NOT_READY };
                         newRoom.save(function (err, room) {
                               if (err || !room) {
                                     console.log("Couldnt save new Room to DB! -> ", err);
@@ -543,7 +559,7 @@ function main(httpServer) {
                         //Find the room and add the driver
                         if (ActiveRooms[data.room_id]) {
                               var room = ActiveRooms[data.room_id];
-                              room.drivers[driver.uuid] = { status: Enum_Driver_Room_Status.NOT_READY, controlled_car_id: null, streamed_car_id: null };
+                              room.drivers[driver.uuid] = { status: Enum_Driver_Room_Status.NOT_READY };
                               room.markModified("drivers");
                               room.save(function (err, updatedRoom) {
                                     if (updatedRoom) {
@@ -569,8 +585,6 @@ function main(httpServer) {
       });
 
       function onDisconnect(driver) {
-            driver.status = Enum_Driver_Status.OFFLINE;
-            driver.save();
             if (ActiveDrivers[driver.uuid].room) {
                   var room = ActiveDrivers[driver.uuid].room;
                   room.drivers[driver.uuid].status = Enum_Driver_Room_Status.OFFLINE;
@@ -594,8 +608,9 @@ function main(httpServer) {
             } else {
                   console.log("Removing driver from ActiveDrivers.");
                   delete ActiveDrivers[driver.uuid];
-                  return;
             }
+            driver.status = Enum_Driver_Status.OFFLINE;
+            driver.save();
       }
 
       function logDriverIn(driver, _socket) {
@@ -685,11 +700,12 @@ function main(httpServer) {
                   delete PrivateRoomSnapshots[room_id];
             };
             this.emitUpdate[this.UpdateTypes.ROOM_ENTERED_RACE] = function (track_id, room_id) {
-                  Snapshot[track_id].room_in_race = { uuid: room_id, track_id, drivers: {} };
+                  Snapshot[track_id].room_in_race = { uuid: room_id, drivers: {} };
                   for (var d in ActiveRooms[room_id].drivers) {
-                        Snapshot[track_id].room_in_race.drivers[d] = { username: ActiveDrivers[d].driver };
+                        Snapshot[track_id].room_in_race.drivers[d] = ActiveDrivers[d].driver.username;
                   }
-                  //As we add the room to room_in_race, we remove it from the waiting queue.
+                  ActiveRooms[room_id].status = Enum_Room_Status.IN_PRE_RACE;
+                  //As we add the room to room_in_race, we remove it from the waiting queue. It still exists on ActiveRooms.
                   delete Snapshot[track_id].rooms[room_id];
                   io.emit("update", { type: _that.UpdateTypes.ROOM_ENTERED_RACE, data: { room : Snapshot[track_id].room_in_race } });
             };
@@ -757,12 +773,16 @@ function main(httpServer) {
       };
 
       function RemoveDriverFromRoom(driverid) {
+            //TODO: Do NOT remove driver if his room was taken to the race area.
+            if (room.status != Enum_Room_Status.CREATING && room.status != Enum_Room_Status.IN_QUEUE && room.status != Enum_Room_Status.IN_QUEUE_READY)
+                  return;
             var room = ActiveDrivers[driverid].room;
             //remove driver from the room
             if (room && room.drivers[driverid]) {
                   if(ActiveDrivers[driverid].socket){
                         ActiveDrivers[driverid].socket.leave(room.uuid);
                   }
+                  localServer.disconnectDriver(room.track_id, driverid);
                   delete room.drivers[driverid];
                   delete ActiveDrivers[driverid].room;
                   //if this was the only driver in the room, close the room.
@@ -786,8 +806,7 @@ function main(httpServer) {
                   }
                   room.markModified("drivers");
                   room.save();
-                  if (ActiveDrivers[driverid].status == Enum_Driver_Status.CONNECTED_TO_LOCAL_SERVER)
-                        localServer.disconnectDriver(driverid);
+                  
                   if(ActiveDrivers[driverid].socket && ActiveDrivers[driverid].socket.connected){
                         ActiveDrivers[driverid].driver.status = Enum_Driver_Status.ONLINE;
                         ActiveDrivers[driverid].driver.save();
@@ -887,106 +906,135 @@ function main(httpServer) {
             });
 
             socket.on('startrace', (data, callback) => {
+                  var room_in_race = ActiveRooms[trackList[data.track_id].room_id_in_race];
+                  if(!room_in_race){
+                        callback({ success: false, reason: Enum_Callback_Reason.NO_ROOM_IN_RACE });
+                        return;
+                  }
                   //LS will give control to all drivers in the race and set race->is_started to TRUE;
-                  localServer.startRace(data.race_id);
+                  localServer.startRace(data.track_id, room_in_race.race.uuid);
             });
 
             socket.on('pauserace', (data, callback) => {
+                  var room_in_race = ActiveRooms[trackList[data.track_id].room_id_in_race];
+                  if(!room_in_race){
+                        callback({ success: false, reason: Enum_Callback_Reason.NO_ROOM_IN_RACE });
+                        return;
+                  }
                   //LS will set race->is_paused to TRUE and stop increasing race->elapsed_time.
-                  localServer.pauseRace(data.race_id);
+                  localServer.pauseRace(data.track_id, room_in_race.race.uuid);
             });
 
             socket.on('resumerace', (data, callback) => {
                   //LS will set race->is_paused to FALSE to remove controls and to stop increasing race->elapsed_time.
-                  localServer.resumeRace(data.race_id);
+                  localServer.resumeRace(data.track_id, data.race_id);
             });
             socket.on('endrace', (data, callback) => {
                   //LS will calculate ratings and send them to both drivers and Web Server. Then, LS will disconnect drivers.
-                  localServer.endRace(data.race_id);
+                  localServer.endRace(data.track_id, data.race_id);
             });
 
             socket.on('abortrace', (data, callback) => {
                   //LS will send a abort message to drivers and disconnect them and remove race.
-                  localServer.abortRace(data.race_id);
+                  localServer.abortRace(data.track_id, data.race_id);
             });
 
             socket.on('takenextroomin', (data, callback) => {
-                  //TODO: If the current room is still in race, return false with reason STILL_IN_RACE.
-
+                  //If the current room is still in race, return false with reason STILL_IN_RACE.
+                  if(trackList[data.track_id].room_id_in_race){
+                        var room_in_race = ActiveRooms[trackList[data.track_id].room_id_in_race];
+                        if(room_in_race.status != Enum_Room_Status.IN_RACE_RESULT){
+                              callback({ success: false, reason: Enum_Callback_Reason.STILL_IN_RACE });
+                              return;
+                        }else{
+                              //It is time to close previous room.
+                        }
+                  }
 
                   //Take first ready room in the queue of the selected track to the game waiting screen.
-                  //Send createrace command to LS with driver and car ids.
+                  //Connect all drivers to Local Server via WebRTC.
                   var room = GetNextRoomByTrackId(data.track_id);
+                  if(!room){
+                        callback({ success: false, reason: Enum_Callback_Reason.NO_READY_ROOM_IN_QUEUE });
+                        return;
+                  }
                   room.status = Enum_Room_Status.IN_PRE_RACE;
+                  room.save();
+
                   var driver_ids = [];
                   for(var driver_id in room.drivers)
                         driver_ids.push(driver_id);
 
-                  localServer.createRace(data.race_id, data.max_duration, driver_ids, data.car_ids);
-                  
+                  var race_id = uuidv4();
+                  //Send createrace command to LS with driver ids.
+                  localServer.createRace(data.track_id, race_id, data.max_duration, driver_ids);
+                  callback({ success: true, race_id, room_private_view: RoomPrivateViewModel(room) });
                   UpdateManager.emitUpdate[UpdateManager.UpdateTypes.ROOM_ENTERED_RACE](room.track_id, room.uuid);
             });
 
             socket.on('controlcar', (data, callback) => {
-                  localServer.controlCar(data.car_id, data.throttle, data.steering);
+                  localServer.controlCar(data.track_id, data.car_id, data.throttle, data.steering);
             });
 
             socket.on('removedriver', (data, callback) => {
                   //Remove Driver from the room and disconnect from LS. Direct him to result screen and show him as kicked.
-                  localServer.RemoveDriverFromRoom(data.driver_id);
+                  localServer.RemoveDriverFromRoom(data.track_id, data.driver_id);
             });
 
             socket.on('connecttodrivermodified', (data, callback) => {
                   //Tell LS to stream Car camera to the Driver.
-                  localServer.connectToDriver(data.driver_id);
+                  localServer.connectToDriver(data.track_id, data.driver_id);
                   callback({success: true});
             });
             socket.on('watch', (data, callback) => {
+                  //This is a temporary function.
                   //Tell LS to stream Car camera to the Driver.
-                  localServer.watch(data.driver_id);
+                  localServer.watch(data.track_id, data.driver_id);
+                  ActiveDrivers[data.driver_id].driver.status = Enum_Driver_Status.CONNECTED_TO_LOCAL_SERVER;
+                  ActiveDrivers[data.driver_id].driver.save();
                   callback({success: true});
             });
             socket.on('setdriverofcar', (data, callback) => {
                   //Tell LS to stream Car camera to the Driver.
-                  localServer.setDriverOfCar(data.driver_id, data.car_id);
+                  localServer.setDriverOfCar(data.track_id, data.driver_id, data.car_id);
                   callback({success: true});
             });
             socket.on('startrecording', (data, callback) => {
                   //Tell LS to stream Car camera to the Driver.
-                  localServer.startRecording(data.driver_id);
+                  localServer.startRecording(data.track_id, data.driver_id);
                   callback({success: true});
             });
 
             socket.on('stoprecording', (data, callback) => {
                   //Tell LS to stream Car camera to the Driver.
-                  localServer.stopRecording(data.driver_id);
+                  localServer.stopRecording(data.track_id, data.driver_id);
                   callback({success: true});
             });
 
             socket.on('streamtodrivermodified', (data, callback) => {
                   //Tell LS to stream Car camera to the Driver.
-                  localServer.streamToDriverModified(data.driver_id);
+                  localServer.streamToDriverModified(data.track_id, data.driver_id);
                   callback({success: true});
             });
 
             socket.on('streamtodriver', (data, callback) => {
                   //Tell LS to stream Car camera to the Driver.
-                  localServer.streamToDriver(data.driver_id, data.car_id);
+                  localServer.streamToDriver(data.track_id, data.driver_id, data.car_id);
             });
 
             socket.on('stopstream', (data, callback) => {
                   //Tell LS to stop streaming to this Driver.
-                  localServer.stopStreamToDriver(data.driver_id);
+                  localServer.stopStreamToDriver(data.track_id, data.driver_id);
             });
 
             socket.on('givecontrol', (data, callback) => {
                   //Tell LS to give control of the Car to this Driver.
-                  localServer.giveControlToDriver(data.driver_id, data.car_id);
+                  localServer.giveControlToDriver(data.track_id, data.driver_id, data.car_id);
             });
 
             socket.on('cutcontrol', (data, callback) => {
                   //Tell LS to remove control of the Car of this Driver.
-                  localServer.cutControlOfDriver(data.driver_id);
+                  localServer.cutControlOfDriver(data.track_id, data.driver_id);
             });
 
       });
@@ -1002,7 +1050,10 @@ function createNewToken(data, expiresIn) {
 
 
 var localServerCallbacks = {
-      on_offer: function (driverId, sdp, isleft) {
+      on_firstconnection: function(track_id){
+            //This is when LS gets its first connection from Web Server after LS restarted. If there is a room in race we need to send create race command.
+      },
+      on_offer: function (track_id, driverId, sdp, isleft) {
             //COMMENT OUT HERE #################################################
             //COMMENT OUT HERE #################################################
             //COMMENT OUT HERE #################################################
@@ -1012,10 +1063,10 @@ var localServerCallbacks = {
             // }
             ActiveDrivers[driverId].socket.emit("offer", { sdp, isleft });
       },
-      on_webrctup: function (driverId) {
+      on_webrtcup: function (track_id, driverId) {
             //Check if driver is in a room and room has a status IN_RACE, if so, connect him to the car
             if (!ActiveDrivers[driverId]) {
-                  localServer.disconnectDriver(driverId);
+                  localServer.disconnectDriver(track_id, driverId);
                   return;
             }
 
@@ -1023,60 +1074,57 @@ var localServerCallbacks = {
             var socket = ActiveDrivers[driverId].socket;
             var room = ActiveDrivers[driverId].room;
 
-            if (!room) {
-                  localServer.disconnectDriver(driverId);
-                  driver.status = Enum_Driver_Status.ONLINE;
-                  driver.save();
+            if (!room || !ActiveRooms[room.uuid] || !ActiveRooms[room.uuid].drivers[driverId]) {
+                  ActiveDrivers[driverId].room = null;
+                  localServer.disconnectDriver(track_id, driverId);
                   return;
             }
 
-            if (room.drivers[driverId]) {
-                  //Only if the room is in Race, check if there is controlled and streamed car ids
-                  if (room.status == Enum_Room_Status.CREATING) {
-                        room.status = Enum_Room_Status.IN_QUEUE;
-                        room.save();
-                  } else if (room.status == Enum_Room_Status.IN_RACE) {
-                        //If controlled and streamed car ids exist and equal, start stream and control to that car
-                        if (room.drivers[driverId].controlled_car_id && room.drivers[driverId].streamed_car_id && room.drivers[driverId].controlled_car_id == room.drivers[driverId].streamed_car_id) {
-                              localServer.startStreamAndControl(driverId, room.drivers[driverId].controlled_car_id);
-                        } else {
-                              //both controlled car id and streamed car id may exist but be different
-                              //if controlled car id exist, start control to that car
-                              if (room.drivers[driverId].controlled_car_id) {
-                                    localServer.giveControlToDriver(driverId, room.drivers[driverId].controlled_car_id);
-                              }
-                              //if streamed car id exist, start stream to that car
-                              if (room.drivers[driverId].streamed_car_id) {
-                                    localServer.streamToDriver(driverId, room.drivers[driverId].streamed_car_id);
-                              }
+            //Room is closed already or hasnt been to a race yet. So cut the Webrtc connection and change status of the driver.
+            if (room.status == Enum_Room_Status.CREATING || 
+                  room.status == Enum_Room_Status.CLOSED || 
+                  room.status == Enum_Room_Status.IN_QUEUE || 
+                  room.status == Enum_Room_Status.IN_QUEUE_READY) {
+                  //This is unlikely but may happen.
+                  localServer.disconnectDriver(track_id, driverId);
+                  return;
+            } else {
+                  //If controlled and streamed car ids exist and equal, start stream and control to that car
+                  if (room.race.driver_cars[driverId].controlled_car_id && room.race.driver_cars[driverId].streamed_car_id && room.race.driver_cars[driverId].controlled_car_id == room.race.driver_cars[driverId].streamed_car_id) {
+                        localServer.startStreamAndControl(track_id, driverId, room.race.driver_cars[driverId].controlled_car_id);
+                  } else {
+                        //both controlled car id and streamed car id may exist but be different
+                        //if controlled car id exist, start control to that car
+                        if (room.race.driver_cars[driverId].controlled_car_id) {
+                              localServer.giveControlToDriver(track_id, driverId, room.race.driver_cars[driverId].controlled_car_id);
+                        }
+                        //if streamed car id exist, start stream to that car
+                        if (room.race.driver_cars[driverId].streamed_car_id) {
+                              localServer.streamToDriver(track_id, driverId, room.race.driver_cars[driverId].streamed_car_id);
                         }
                   }
-                  //If Room is closed, driver do not need to be here anymore
-                  else if (room.status == Enum_Room_Status.CLOSED) {
-                        //This is unlikely but may happen.
-                        //Room is closed already. So cut the Webrtc connection and change status of the driver.
-                        driver.status = Enum_Driver_Status.ONLINE;
-                        driver.save();
-                        RemoveDriverFromRoom(driver.uuid);
-                        return;
-                  }
-                  driver.status = Enum_Driver_Status.CONNECTED_TO_LOCAL_SERVER;
-                  socket.join(room.uuid);
-                  return;
             }
+            driver.status = Enum_Driver_Status.CONNECTED_TO_LOCAL_SERVER;
+            socket.join(room.uuid);            
       },
-      on_hangup: function (driverId) {
+      on_hangup: function (track_id, driverId) {
             //Driver got disconnected from Local Server. If driver is still connected to Web Server, we should try to connect him to LS again.
             //If driver also disconnected from here, we will just wait him to come again. If he doesnt come, timeout in onDisconnect() will remove him from the room.
       },
-      on_carconnected: function (carId) {
+      on_carconnected: function (track_id, car_id) {
             //TODO: Notify Admins
-            ActiveCars[carId] = { track_id: null, status: "online" }
+            ActiveCars[carId] = ActiveCars[carId] || {};
+            ActiveCars[carId].track_id = track_id;
+            ActiveCars[carId].status = "online";
       },
-      on_cardisconnected: function (carId) {
+      on_cardisconnected: function (track_id, carId) {
             //TODO: Notify Admins
             if(ActiveCars[carId])
                   ActiveCars[carId].status = "offline";
+      },
+      on_car_lap: function (track_id, carId) {
+            //TODO: Notify Admins
+            
       }
 };
 

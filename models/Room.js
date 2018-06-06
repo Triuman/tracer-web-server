@@ -9,9 +9,16 @@ var roomSchema = new mongoose.Schema({
    create_date: {type: Number, required: true},
    admin_id: {type: String, required: true},
    track_id: {type: String, required: true},
-   drivers: {type: Object, required: true}, //{driver_id: {status, controlled_car_id, streamed_car_id }}
+   drivers: {type: Object, required: true}, //{driver_id: { status }}
    chat: [{ username : String, text : String }],
-   race: {type: Object, required: false}
+   race: {
+        uuid: {type: String, required: true},
+        start_date: {type: Number, required: true},
+        finish_date: {type: Number, required: false},
+        status: {type: Number, required: true},
+        driver_cars: {type: Object, required: true}, // { streamed_car_id: String, controlled_car_id: String },
+        ranking: [String] //Driver id list in order.
+    }
 });
 
 var Room = module.exports = mongoose.model("Room", roomSchema);
