@@ -6,21 +6,18 @@ var gameServer = null;
 var wsProtocol = "tracer-protocol";
 
 /* TODO: Put local server ip and port */
-      //var localServerAddress = 'ws://demos.kaazing.com/echo';
       //var localServerAddress = 'ws://127.0.0.1:8188';
-      //var localServerAddress = 'ws://192.168.1.34:8188';
+      //var localServerAddress = 'ws://192.168.1.22:8188';
 
 module.exports = {
    start: function (_gameServer, track_list) {
       gameServer = _gameServer;
-
-
-    for(var track_id in track_list){
       function connectToLocalServer(track){
         setTimeout(function(){
            try{
               ws = new WebSocket(track.server_address, wsProtocol);
               ws.track = track;
+              wsSocketList[track.uuid]=ws;
               ws.on('error', function (err) {
                  //console.log(err);
              });
@@ -35,27 +32,27 @@ module.exports = {
                  switch (request.info) {
                      case 'firstconneciton':
                        //This means LS was restarted and has no info about race and drivers. If there is a room in race, we need to call create race.
-                       gameServer.on_firstconnection();
+                       gameServer.on_firstconnection(ws.track.uuid);
                        break;
                      case 'offer':
                        //Send sdp to game server with driverId
-                       gameServer.on_offer(request.driverid, request.sdp, request.isleft);
+                       gameServer.on_offer(ws.track.uuid, request.driverid, request.sdp, request.isleft);
                        break;
                      case 'webrctup':
                        //Let Game Server know that driver connected to Local Server via WebRTC
-                       gameServer.on_webrtcup(request.driverid);
+                       gameServer.on_webrtcup(ws.track.uuid, request.driverid);
                        break;
                      case 'hangup':
                        //Let Game Server know that driver connected to Local Server via WebRTC
-                       gameServer.on_hangup(request.driverid);
+                       gameServer.on_hangup(ws.track.uuid, request.driverid);
                        break;
                      case 'carconnected':
                        //Let Game Server know that Car is connected to LS
-                       gameServer.on_carconnected(request.carid);
+                       gameServer.on_carconnected(ws.track.uuid, request.carid);
                      break;
                      case 'cardisconnected':
                        //Let Game Server know that Car is disconnected from LS
-                       gameServer.on_cardisconnected(request.carid);
+                       gameServer.on_cardisconnected(ws.track.uuid, request.carid);
                      break;
                  }
                });
@@ -72,17 +69,20 @@ module.exports = {
            }
         }, 3000);
      }
+
+    for(var track_id in track_list){
      if(track_list[track_id].server_address)
       connectToLocalServer(track_list[track_id]);
     }
    },
    sendMessage: function (track_id, msg) {
      var ws = wsSocketList[track_id];
+     console.log(track_id);
       if (ws && ws.readyState == ws.OPEN){
          ws.send(typeof msg === 'string' ? msg : JSON.stringify(msg));
          console.log("Sent message to Local Sever -> " + (typeof msg === 'string' ? msg : JSON.stringify(msg)));
       }else{
-         console.log("LS connection is DOWN!");
+         console.log("Cannot send message to LS. Connection is DOWN!");
       }
    },
    createTrack: function (track_id, id, list1, list2) {
@@ -125,8 +125,8 @@ module.exports = {
    streamToDriverModified: function (track_id, driverid) {
     this.sendMessage(track_id, { command: "startstream", driverid });
     },
-    watch: function (track_id, id) {
-      this.sendMessage(track_id, { command: "watch", id });
+    watch: function (track_id, driverid) {
+      this.sendMessage(track_id, { command: "watch", id: driverid });
    },
    startRecording: function (track_id, driverid) {
       this.sendMessage(track_id, { command: "startrecording", driverid });
@@ -136,43 +136,43 @@ module.exports = {
    },
    //#########################################
    //#########################################
-   streamToDriver: function (driverid, carid) {
+   streamToDriver: function (track_id, driverid, carid) {
       this.sendMessage(track_id, { command: "startstream", driverid, carid });
    },
-   startStreamAndControl: function (driverid, carid) {
+   startStreamAndControl: function (track_id, driverid, carid) {
       this.sendMessage(track_id, { command: "startstreamandcontrol", driverid, carid });
    },
-   stopStreamAndControl: function (driverid) {
+   stopStreamAndControl: function (track_id, driverid) {
       this.sendMessage(track_id, { command: "stopstreamandcontrol", driverid });
    },
-   stopStreamToDriver: function (driverid) {
+   stopStreamToDriver: function (track_id, driverid) {
       this.sendMessage(track_id, { command: "stopstream", driverid });
    },
-   setDriverOfCar: function (driverid, carid) {
+   setDriverOfCar: function (track_id, driverid, carid) {
       this.sendMessage(track_id, { command: "setdriverofcar", driverid, carid });
    },
-   giveControlToDriver: function (driverid, carid) {
+   giveControlToDriver: function (track_id, driverid, carid) {
       this.sendMessage(track_id, { command: "addcontrol", driverid, carid });
    },
-   cutControlOfDriver: function (driverid) {
+   cutControlOfDriver: function (track_id, driverid) {
       this.sendMessage(track_id, { command: "removecontrol", driverid });
    },
-   cutAllControls: function (raceid) {
+   cutAllControls: function (track_id, raceid) {
       this.sendMessage(track_id, { command: "removeallcontrols", raceid });
    },
-   cutAllStreams: function (raceid) {
+   cutAllStreams: function (track_id, raceid) {
       this.sendMessage(track_id, { command: "stopallstreams", raceid });
    },
-   controlCar: function (carid, throttle, steering) {
+   controlCar: function (track_id, carid, throttle, steering) {
       this.sendMessage(track_id, { command: "controlcar", carid, throttle, steering });
    },
-   sendAnswerSdp: function (driverid, answersdp, isleft) {
+   sendAnswerSdp: function (track_id, driverid, answersdp, isleft) {
       this.sendMessage(track_id, { command: "answersdp", answersdp, driverid, isleft });
    },
-   sendCandidate: function (driverid, candidate, isleft) {
+   sendCandidate: function (track_id, driverid, candidate, isleft) {
       this.sendMessage(track_id, { command: "candidate", candidate, driverid, isleft });
    },
-   setStreamUrl: function (carid, url) {
+   setStreamUrl: function (track_id, carid, url) {
       this.sendMessage(track_id, { command: "setstreamurl", url, carid });
    },
    

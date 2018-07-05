@@ -46,7 +46,7 @@ const UpdateTypes = {
 };
 
 var driver = null; //This is DriverPrivateModel
-var my_room_view = null;
+var my_room_view = null; //RoomPrivateModel
 var trackList = {};
 var activeTrack = null;
 
@@ -292,6 +292,8 @@ function StartSocket() {
 
       socket.on('offer', (data) => {
             console.log("Got offer! -> ", data.sdp);
+            // TODO: Remove the line below.
+            my_room_view={track_id: data.track_id};
             if (data.isleft)
                   WebRTCConnection.setOfferLeft(data.sdp);
             else
@@ -791,7 +793,7 @@ function Register(u, p, e) {
 }
 
 function SendAnswer(sdp, isleft) {
-      socket.emit("answer", { sdp, isleft }, (data) => {
+      socket.emit("answer", { track_id: my_room_view.track_id, sdp, isleft }, (data) => {
             console.log("Did we send answer? -> ");
             console.log(data);
             if (data.success == false) {
@@ -804,7 +806,7 @@ function SendAnswer(sdp, isleft) {
 }
 
 function SendIceCandidate(candidate, isleft) {
-      socket.emit("candidate", { candidate, isleft }, (data) => {
+      socket.emit("candidate", { track_id: my_room_view.track_id, candidate, isleft }, (data) => {
             console.log("Did we send candidate? -> ");
             console.log(data);
             if (data.success == false) {
@@ -1023,37 +1025,39 @@ var addKeyEvents = function () {
       document.onkeydown = function (e) {
             switch (e.keyCode) {
                   case 65: //a
-                        currentLeftRightValue += -49;
+                        currentLeftRightValue = +40;
                         break;
                   case 68: //d
-                        currentLeftRightValue += +49;
+                        currentLeftRightValue = -40;
                         break;
                   case 87: //w
-                        currentLeftForwardBackward = -49;
+                        currentLeftForwardBackward = +40;
                         break;
                   case 83: //s
-                        currentLeftForwardBackward = +49;
+                        currentLeftForwardBackward = -40;
                         break;
                   default:
             }
+            sendCommandToCar();
       };
 
       document.onkeyup = function (e) {
             switch (e.keyCode) {
                   case 65: //a
-                        currentLeftRightValue += +49;
+                        currentLeftRightValue = 0;
                         break;
                   case 68: //d
-                        currentLeftRightValue += -49;
+                        currentLeftRightValue = 0;
                         break;
                   case 87: //w
-                        currentLeftForwardBackward = +49;
+                        currentLeftForwardBackward = 0;
                         break;
                   case 83: //s
-                        currentLeftForwardBackward = -49;
+                        currentLeftForwardBackward = 0;
                         break;
                   default:
             }
+            sendCommandToCar();
       };
 
 
@@ -1062,6 +1066,15 @@ var addKeyEvents = function () {
       remoteViewLeft.onkeydown = document.onkeydown;
       remoteViewLeft.onkeyup = document.onkeyup;
 };
+
+var removeKeyEvents = function () {
+      document.onkeydown = function (e) {
+      };
+
+      document.onkeyup = function (e) {
+      };
+};
+
 
 var lastCommand = "";
 function sendCommandToCar() {
@@ -1162,12 +1175,12 @@ var WebRTCConnection = new function () {
                   dataChannel.onopen = function () {
                         console.log("The Data Channel is Open!");
                         dataChannel.send("0" + driver.uuid);
-
                         addKeyEvents();
                   };
 
                   dataChannel.onclose = function () {
                         console.log("The Data Channel is Closed");
+                        removeKeyEvents();
                   };
 
 

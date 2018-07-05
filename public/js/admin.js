@@ -115,15 +115,15 @@ function ConnectToDriverModified(driver_id){
    });
 }
 
-function Watch(driver_id){
-   socket.emit("watch", { driver_id }, (data) => {
+function Watch(track_id, driver_id){
+   socket.emit("watch", { track_id, driver_id }, (data) => {
       console.log("Did we start watching : ? -> " + driver_id);
       console.log(data);
    });
 }
 
-function SetDriverOfCar(driver_id, car_id){
-   socket.emit("setdriverofcar", { driver_id, car_id }, (data) => {
+function SetDriverOfCar(track_id, driver_id, car_id){
+   socket.emit("setdriverofcar", { track_id, driver_id, car_id }, (data) => {
       console.log("Did we set driver of car : ? -> " + driver_id + " - " + car_id);
       console.log(data);
    });

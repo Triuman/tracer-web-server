@@ -1061,7 +1061,7 @@ var localServerCallbacks = {
             //       localServer.disconnectDriver(driverId);
             //       return;
             // }
-            ActiveDrivers[driverId].socket.emit("offer", { sdp, isleft });
+            ActiveDrivers[driverId].socket.emit("offer", { track_id, sdp, isleft });
       },
       on_webrtcup: function (track_id, driverId) {
             //Check if driver is in a room and room has a status IN_RACE, if so, connect him to the car
@@ -1111,7 +1111,7 @@ var localServerCallbacks = {
             //Driver got disconnected from Local Server. If driver is still connected to Web Server, we should try to connect him to LS again.
             //If driver also disconnected from here, we will just wait him to come again. If he doesnt come, timeout in onDisconnect() will remove him from the room.
       },
-      on_carconnected: function (track_id, car_id) {
+      on_carconnected: function (track_id, carId) {
             //TODO: Notify Admins
             ActiveCars[carId] = ActiveCars[carId] || {};
             ActiveCars[carId].track_id = track_id;
