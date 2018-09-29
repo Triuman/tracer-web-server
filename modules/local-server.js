@@ -151,8 +151,8 @@ module.exports = {
    setDriverOfCar: function (track_id, driverid, carid) {
       this.sendMessage(track_id, { command: "setdriverofcar", driverid, carid });
    },
-   giveControlToDriver: function (track_id, driverid, carid) {
-      this.sendMessage(track_id, { command: "addcontrol", driverid, carid });
+   giveControlToDriver: function (track_id, driverid) {
+      this.sendMessage(track_id, { command: "addcontrol", driverid });
    },
    cutControlOfDriver: function (track_id, driverid) {
       this.sendMessage(track_id, { command: "removecontrol", driverid });
