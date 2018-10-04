@@ -20,7 +20,9 @@ const Enum_Callback_Reason = {
    NO_ROOM_WITH_GIVEN_ID: 11,
    DRIVER_IS_NOT_IN_A_ROOM: 12,
    STILL_IN_RACE: 13, //If admin tries to take next room in while there is a race running on a track, we will send this reason.
-   NO_READY_ROOM_IN_QUEUE: 14
+   NO_READY_ROOM_IN_QUEUE: 14,
+   NO_ROOM_IN_RACE: 15,
+   LOCAL_SERVER_IS_DOWN: 16
 };
 
 const Enum_Driver_Room_Status = {

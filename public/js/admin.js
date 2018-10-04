@@ -16,7 +16,9 @@ const Enum_Callback_Reason = {
    NO_ROOM_WITH_GIVEN_ID: 11,
    DRIVER_IS_NOT_IN_A_ROOM: 12,
    STILL_IN_RACE: 13, //If admin tries to take next room in while there is a race running on a track, we will send this reason.
-   NO_READY_ROOM_IN_QUEUE: 14
+   NO_READY_ROOM_IN_QUEUE: 14,
+   NO_ROOM_IN_RACE: 15,
+   LOCAL_SERVER_IS_DOWN: 16
 };
 
 const Enum_Driver_Room_Status = {
@@ -82,23 +84,22 @@ window.onload = function () {
       UpdateHandler[update.type](update.data);
    });
 
-   socket.on('room_in_race', (data) => {
+   socket.on('room_in_race', (room_in_race) => {
       console.log("Got room_in_race! -> ");
-      console.log(data.room_in_race);
-      room_in_race = data.room_in_race;
+      console.log(room_in_race);
       //Put names on the list view
       for(var i=1;i<=4;i++){
-         $("txtDriverName" + i).html("EMPTY");
-         $("txtDriverName" + i).data("uuid", "");
+         $("#txtDriverName" + i).html("EMPTY");
+         $("#txtDriverName" + i).data("uuid", "");
       }
       var driverNo = 1;
       for(var driverId in room_in_race.drivers){
-         $("txtDriverName" + driverNo).html(room_in_race.drivers[driverId].username);
-         $("txtDriverName" + driverNo).data("uuid", driverId);
+         $("#txtDriverName" + driverNo).html(room_in_race.drivers[driverId].username);
+         $("#txtDriverName" + driverNo).data("uuid", driverId);
          driverNo++;
 
-         if($("txtCarName" + driverNo).data("uuid")!="")
-            SetDriverOfCar(activeTrack.uuid, driverId, $("txtCarName" + driverNo).data("uuid"));
+         if($("#txtCarName" + driverNo).data("uuid")!="")
+            SetDriverOfCar(activeTrack.uuid, driverId, $("#txtCarName" + driverNo).data("uuid"));
       }
    });
 
@@ -107,75 +108,86 @@ window.onload = function () {
       console.log(data);
       cars = data.cars;
       for(var i=1;i<=4;i++){
-         $("txtCarName" + i).html("EMPTY");
-         $("txtCarName" + i).data("uuid", "");
+         $("#txtCarName" + i).html("EMPTY");
+         $("#txtCarName" + i).data("uuid", "");
       }
       var carNo = 1;
       for(var carId in cars){
-         $("txtCarName" + carNo).html(cars[carId].name);
-         $("txtCarName" + carNo).data("uuid", carId);
+         $("#txtCarName" + carNo).html(cars[carId].name);
+         $("#txtCarName" + carNo).data("uuid", carId);
          carNo++;
 
-         if($("txtDriverName" + carNo).data("uuid")!="")
-            SetDriverOfCar(activeTrack.uuid, $("txtDriverName" + carNo).data("uuid"), carId);
+         if($("#txtDriverName" + carNo).data("uuid")!="")
+            SetDriverOfCar(activeTrack.uuid, $("#txtDriverName" + carNo).data("uuid"), carId);
       }
    });
 
    //Add Button Events
-   $("imgEye1").click(function(){
+   $("#imgEye1").click(function(){
       OnEyeClick(1);
    });
-   $("imgControl1").click(function(){
+   $("#imgControl1").click(function(){
       OnControlClick(1);
    });
-   $("imgEye2").click(function(){
+   $("#imgEye2").click(function(){
       OnEyeClick(2);
    });
-   $("imgControl2").click(function(){
+   $("#imgControl2").click(function(){
       OnControlClick(2);
    });
-   $("imgEye3").click(function(){
+   $("#imgEye3").click(function(){
       OnEyeClick(3);
    });
-   $("imgControl3").click(function(){
+   $("#imgControl3").click(function(){
       OnControlClick(3);
    });
-   $("imgEye4").click(function(){
+   $("#imgEye4").click(function(){
       OnEyeClick(4);
    });
-   $("imgControl4").click(function(){
+   $("#imgControl4").click(function(){
       OnControlClick(4);
+   });
+
+   $("#btnTakeNextRoomIn").click(function(){
+      TakeNextRoomIn(activeTrack.uuid);
+   });
+   $("#btnStartRace").click(function(){
+      StartRace(activeTrack.uuid);
+   });
+   $("#btnPauseRace").click(function(){
+      PauseRace(activeTrack.uuid);
+   });
+   $("#btnAbortRace").click(function(){
+      AbortRace(activeTrack.uuid);
    });
 }
 
 function OnEyeClick(eyeNo){
-   var driverId = $("txtDriverName" + eyeNo).data("uuid");
-   var carId = $("txtCarName" + eyeNo).data("uuid");
+   var driverId = $("#txtDriverName" + eyeNo).data("uuid");
+   var carId = $("#txtCarName" + eyeNo).data("uuid");
    if(driverId == "" || carId == "")
       return;
 
-   if($("imgEye" + eyeNo).attr("src").includes("eyeOpen")){
+   if($("#imgEye" + eyeNo).attr("src").includes("eyeOpen")){
       StopStreamToDriver(activeTrack.uuid, driverId);
-      $("imgEye" + eyeNo).attr("src", "/public/images/eyeClosed.png");
-   }
-   else{
+      $("#imgEye" + eyeNo).attr("src", "/public/images/eyeClosed.png");
+   }else{
       StartStreamToDriver(activeTrack.uuid, driverId);
-      $("imgEye" + eyeNo).attr("src", "/public/images/eyeOpen.png");
+      $("#imgEye" + eyeNo).attr("src", "/public/images/eyeOpen.png");
    }
 }
 function OnControlClick(controlNo){
-   var driverId = $("txtDriverName" + controlNo).data("uuid");
-   var carId = $("txtCarName" + controlNo).data("uuid");
+   var driverId = $("#txtDriverName" + controlNo).data("uuid");
+   var carId = $("#txtCarName" + controlNo).data("uuid");
    if(driverId == "" || carId == "")
       return;
 
-   if($("imgControl" + eyeNo).attr("src").includes("controlOpen")){
+   if($("#imgControl" + controlNo).attr("src").includes("controlOpen")){
       CutControlToDriver(activeTrack.uuid, driverId);
-      $("imgControl" + eyeNo).attr("src", "/public/images/controlCut.png");
-   }
-   else{
+      $("#imgControl" + controlNo).attr("src", "/public/images/controlCut.png");
+   }else{
       GiveControlToDriver(activeTrack.uuid, driverId);
-      $("imgControl" + eyeNo).attr("src", "/public/images/controlOpen.png");
+      $("#imgControl" + controlNo).attr("src", "/public/images/controlOpen.png");
    }
    
 }
@@ -188,6 +200,7 @@ function ProcessSnapshot(data) {
    for (var track_id in data) {
       trackList[track_id] = {
          uuid: track_id,
+         room_in_race: null,
          rooms: {}
       };
       for (var r in data[track_id].rooms) {
@@ -488,12 +501,37 @@ function TakeNextRoomIn(track_id) {
    socket.emit("takenextroomin", { track_id }, (data) => {
       console.log("Did we got room info? -> ");
       console.log(data);
+      
+      if(!data.success)
+         return;
+
+      activeTrack.room_in_race = data.room_private_view;
+      var i=0;
+      for(var driver_id in data.room_private_view.drivers){
+         i++;
+         $("#txtDriverName" + i).html(data.room_private_view.drivers[driver_id].username);
+         $("#txtDriverName" + i).data("uuid", driver_id);
+      }
    });
 }
 
-function StartRace(race_id) {
-   socket.emit("startrace", { race_id }, (data) => {
+function StartRace(track_id) {
+   socket.emit("startrace", { track_id }, (data) => {
       console.log("Did we start the race? -> ");
+      console.log(data);
+   });
+}
+
+function PauseRace(track_id) {
+   socket.emit("pauserace", { track_id }, (data) => {
+      console.log("Did we pause the race? -> ");
+      console.log(data);
+   });
+}
+
+function AbortRace(track_id) {
+   socket.emit("abortrace", { track_id }, (data) => {
+      console.log("Did we abort the race? -> ");
       console.log(data);
    });
 }

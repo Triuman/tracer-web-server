@@ -15,7 +15,7 @@ module.exports = {
       function connectToLocalServer(track){
         setTimeout(function(){
            try{
-              ws = new WebSocket(track.server_address, wsProtocol);
+              var ws = new WebSocket(track.server_address, wsProtocol);
               ws.track = track;
               wsSocketList[track.uuid]=ws;
               ws.on('error', function (err) {
@@ -30,8 +30,8 @@ module.exports = {
                  var request = JSON.parse(data);
          
                  switch (request.info) {
-                     case 'firstconneciton':
-                       //This means LS was restarted and has no info about race and drivers. If there is a room in race, we need to call create race.
+                     case 'firstconnection':
+                       //This means LS was restarted and has no info about track lines, race and drivers. If there is a room in race, we need to call create race.
                        gameServer.on_firstconnection(ws.track.uuid);
                        break;
                      case 'offer':
@@ -81,99 +81,101 @@ module.exports = {
       if (ws && ws.readyState == ws.OPEN){
          ws.send(typeof msg === 'string' ? msg : JSON.stringify(msg));
          console.log("Sent message to Local Sever -> " + (typeof msg === 'string' ? msg : JSON.stringify(msg)));
+         return true;
       }else{
          console.log("Cannot send message to LS. Connection is DOWN!");
+         return false;
       }
    },
-   createTrack: function (track_id, id, list1, list2) {
-      this.sendMessage(track_id, { command: "createtrack", id, list1, list2 });
+   setTrackLines: function (track_id, list1, list2) {
+      return this.sendMessage(track_id, { command: "settracklines", list1, list2 });
    },
    createRace: function (track_id, id, max_duration, driver_ids, car_ids) {
       //Driver count can be bigger than car id count but not vice versa. LS will ignore the extra cars anyways.
-      this.sendMessage(track_id, { command: "createrace", id, max_duration, driver_ids, car_ids });
+      return this.sendMessage(track_id, { command: "createrace", id, max_duration, driver_ids, car_ids });
    },
    addCarToRace: function (track_id, carid, raceid, driverid) {
-      this.sendMessage(track_id, { command: "addcartorace", carid, raceid, driverid });
+      return this.sendMessage(track_id, { command: "addcartorace", carid, raceid, driverid });
    },
    removeCarFromRace: function (track_id, carid) {
-      this.sendMessage(track_id, { command: "removecarfromrace", carid, raceid });
+      return this.sendMessage(track_id, { command: "removecarfromrace", carid, raceid });
    }, 
    startRace: function (track_id, raceid) {
-      this.sendMessage(track_id, { command: "startrace", raceid });
+      return this.sendMessage(track_id, { command: "startrace", raceid });
    },
    pauseRace: function (track_id, raceid) {
-      this.sendMessage(track_id, { command: "pauserace", raceid });
+      return this.sendMessage(track_id, { command: "pauserace", raceid });
    },
    resumeRace: function (track_id, raceid) {
-      this.sendMessage(track_id, { command: "resumerace", raceid });
+      return this.sendMessage(track_id, { command: "resumerace", raceid });
    },
    endRace: function (track_id, raceid) {
-      this.sendMessage(track_id, { command: "endrace", raceid });
+      return this.sendMessage(track_id, { command: "endrace", raceid });
    },
    abortRace: function (track_id, raceid) {
-      this.sendMessage(track_id, { command: "abortrace", raceid });
+      return this.sendMessage(track_id, { command: "abortrace", raceid });
    },
    connectToDriver: function (track_id, driverid) {
       //Tell LS to establish a webRTC connection with this Driver.
-      this.sendMessage(track_id, { command: "connecttodriver", id:driverid });
+      return this.sendMessage(track_id, { command: "connecttodriver", id:driverid });
    },
    disconnectDriver: function (track_id, driverid) {
-      this.sendMessage(track_id, { command: "disconnectdriver", driverid });
+      return this.sendMessage(track_id, { command: "disconnectdriver", driverid });
    },
    //#########################################
    //REMOVE LINE BELOW!!!!!
    streamToDriverModified: function (track_id, driverid) {
-    this.sendMessage(track_id, { command: "startstream", driverid });
+      return this.sendMessage(track_id, { command: "startstream", driverid });
     },
     watch: function (track_id, driverid) {
-      this.sendMessage(track_id, { command: "watch", id: driverid });
+      return this.sendMessage(track_id, { command: "watch", id: driverid });
    },
    startRecording: function (track_id, driverid) {
-      this.sendMessage(track_id, { command: "startrecording", driverid });
+      return this.sendMessage(track_id, { command: "startrecording", driverid });
    },
    stopRecording: function (track_id, driverid) {
-      this.sendMessage(track_id, { command: "stoprecording", driverid });
+      return this.sendMessage(track_id, { command: "stoprecording", driverid });
    },
    //#########################################
    //#########################################
    streamToDriver: function (track_id, driverid, carid) {
-      this.sendMessage(track_id, { command: "startstream", driverid, carid });
+      return this.sendMessage(track_id, { command: "startstream", driverid, carid });
    },
    startStreamAndControl: function (track_id, driverid, carid) {
-      this.sendMessage(track_id, { command: "startstreamandcontrol", driverid, carid });
+      return this.sendMessage(track_id, { command: "startstreamandcontrol", driverid, carid });
    },
    stopStreamAndControl: function (track_id, driverid) {
-      this.sendMessage(track_id, { command: "stopstreamandcontrol", driverid });
+      return this.sendMessage(track_id, { command: "stopstreamandcontrol", driverid });
    },
    stopStreamToDriver: function (track_id, driverid) {
-      this.sendMessage(track_id, { command: "stopstream", driverid });
+      return this.sendMessage(track_id, { command: "stopstream", driverid });
    },
    setDriverOfCar: function (track_id, driverid, carid) {
-      this.sendMessage(track_id, { command: "setdriverofcar", driverid, carid });
+      return this.sendMessage(track_id, { command: "setdriverofcar", driverid, carid });
    },
    giveControlToDriver: function (track_id, driverid) {
-      this.sendMessage(track_id, { command: "addcontrol", driverid });
+      return this.sendMessage(track_id, { command: "addcontrol", driverid });
    },
    cutControlOfDriver: function (track_id, driverid) {
-      this.sendMessage(track_id, { command: "removecontrol", driverid });
+      return this.sendMessage(track_id, { command: "removecontrol", driverid });
    },
    cutAllControls: function (track_id, raceid) {
-      this.sendMessage(track_id, { command: "removeallcontrols", raceid });
+      return this.sendMessage(track_id, { command: "removeallcontrols", raceid });
    },
    cutAllStreams: function (track_id, raceid) {
-      this.sendMessage(track_id, { command: "stopallstreams", raceid });
+      return this.sendMessage(track_id, { command: "stopallstreams", raceid });
    },
    controlCar: function (track_id, carid, throttle, steering) {
-      this.sendMessage(track_id, { command: "controlcar", carid, throttle, steering });
+      return this.sendMessage(track_id, { command: "controlcar", carid, throttle, steering });
    },
    sendAnswerSdp: function (track_id, driverid, answersdp, isleft) {
-      this.sendMessage(track_id, { command: "answersdp", answersdp, driverid, isleft });
+      return this.sendMessage(track_id, { command: "answersdp", answersdp, driverid, isleft });
    },
    sendCandidate: function (track_id, driverid, candidate, isleft) {
-      this.sendMessage(track_id, { command: "candidate", candidate, driverid, isleft });
+      return this.sendMessage(track_id, { command: "candidate", candidate, driverid, isleft });
    },
    setStreamUrl: function (track_id, carid, url) {
-      this.sendMessage(track_id, { command: "setstreamurl", url, carid });
+      return this.sendMessage(track_id, { command: "setstreamurl", url, carid });
    },
    
 }

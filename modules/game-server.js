@@ -119,7 +119,8 @@ const Enum_Callback_Reason = {
       DRIVER_IS_NOT_IN_A_ROOM: 12,
       STILL_IN_RACE: 13, //If admin tries to take next room in while there is a race running on a track, we will send this reason.
       NO_READY_ROOM_IN_QUEUE: 14,
-      NO_ROOM_IN_RACE: 15
+      NO_ROOM_IN_RACE: 15,
+      LOCAL_SERVER_IS_DOWN: 16
 };
 
 //DB user pass: tracerwebserver**
@@ -143,7 +144,7 @@ module.exports.start = function (httpServer) {
             // });
 
             //Take all necessary info to variables(ActiveRooms, ActiveDriver, Snapshot etc) then start socketio server.
-            Track.find({}, function (err, tracks) {
+            Track.find({is_active: true}, function (err, tracks) {
                   if (err) {
                         console.log("Error while getting Tracks from DB.-> " + err);
                         return;
@@ -178,11 +179,12 @@ module.exports.start = function (httpServer) {
                         if(rooms[r].uuid == track.room_id_in_race){
                               Snapshot[track.uuid].room_in_race = {
                                     uuid: rooms[r].uuid,
-                                    drivers: {},
-                                    ranking: []
+                                    track_id: rooms[r].track_id,
+                                    drivers: {}, //{ uuid: username }
+                                    ranking: rooms[r].race.ranking
                               };
-                              for(var r=0;r<rooms[r].race.ranking.length;r++)
-                                    Snapshot[track.uuid].room_in_race.ranking[r] = rooms[r].race.ranking[r];
+                              // for(var r=0;r<rooms[r].race.ranking.length;r++)
+                              //       Snapshot[track.uuid].room_in_race.ranking[r] = rooms[r].race.ranking[r];
                         }
 
                         ActiveRooms[rooms[r].uuid] = rooms[r];
@@ -213,8 +215,6 @@ module.exports.start = function (httpServer) {
                         }
                         ActiveDrivers[driver.uuid].driver = driver;
                         PrivateRoomSnapshots[room_id].drivers[driver.uuid] = DriverPublicViewModel(driver);
-                        console.log(room_id);
-                        console.log(driver.uuid);
                   }
             });
       }
@@ -287,12 +287,14 @@ function main(httpServer) {
                   for(var d in room.drivers){
                         if(room.drivers[d].status == Enum_Driver_Room_Status.OFFLINE || room.drivers[d].status == Enum_Driver_Room_Status.NOT_READY){
                               ready = 0;
-                              break;
+                              break; //We leave since someone is not ready
                         }else if(room.drivers[d].status == Enum_Driver_Room_Status.READY)
                               ready++;
                   }
-                  if(ready > 1)
-                        room.status = Enum_Room_Status.IN_QUEUE_READY;
+                  if(ready > 1){
+                     room.status = Enum_Room_Status.IN_QUEUE_READY;
+                     room.save();
+                  }
                   UpdateManager.emitUpdate[UpdateManager.UpdateTypes.DRIVER_IS_READY](ActiveDrivers[socket.driver.uuid].room.track_id, ActiveDrivers[socket.driver.uuid].room.uuid, socket.driver.uuid);
                   callback({ success: true });
             });
@@ -604,7 +606,7 @@ function main(httpServer) {
                   ActiveDrivers[driver.uuid].socket.leave(room.uuid);
                   //let others in the room know this driver got offline
                   UpdateManager.emitUpdate[UpdateManager.UpdateTypes.DRIVER_GOT_OFFLINE](room.track_id, room.uuid, driver.uuid);
-                  if (room.status == Enum_Room_Status.CREATING || room.status == Enum_Room_Status.IN_QUEUE) {
+                  if (room.status == Enum_Room_Status.CREATING || room.status == Enum_Room_Status.IN_QUEUE || room.status == Enum_Room_Status.IN_QUEUE_READY) {
                         var timeoutId = setTimeout(function () {
                               console.log("Waited enough for the Driver. Removing from room and ActiveDrivers.");
                               RemoveDriverFromRoom(driver.uuid);
@@ -659,9 +661,9 @@ function main(httpServer) {
       //This is used when TakeNextRoomIn is called.
       function GetNextRoomByTrackId(track_id) {
             var theroom;
-            for (var room in ActiveRooms) {
-                  if (room.status == Enum_Room_Status.IN_QUEUE_READY && room.track_id == track_id && room.race == null && (!theroom || room.create_date < theroom.create_date))
-                        theroom = room;
+            for (var room_id in ActiveRooms) {
+                  if (ActiveRooms[room_id].status == Enum_Room_Status.IN_QUEUE_READY && ActiveRooms[room_id].track_id == track_id && ActiveRooms[room_id].race == null && (!theroom || ActiveRooms[room_id].create_date < theroom.create_date))
+                        theroom = ActiveRooms[room_id];
             }
             return theroom;
       }
@@ -712,7 +714,7 @@ function main(httpServer) {
                   delete PrivateRoomSnapshots[room_id];
             };
             this.emitUpdate[this.UpdateTypes.ROOM_ENTERED_RACE] = function (track_id, room_id) {
-                  Snapshot[track_id].room_in_race = { uuid: room_id, drivers: {} };
+                  Snapshot[track_id].room_in_race = { uuid: room_id, track_id, drivers: {} };
                   for (var d in ActiveRooms[room_id].drivers) {
                         Snapshot[track_id].room_in_race.drivers[d] = ActiveDrivers[d].driver.username;
                   }
@@ -732,7 +734,6 @@ function main(httpServer) {
             this.emitUpdate[this.UpdateTypes.DRIVER_JOINED_ROOM] = function (track_id, room_id, driver_view) {
                   Snapshot[track_id].rooms[room_id].driver_count.not_ready++;
                   PrivateRoomSnapshots[room_id].drivers[driver_view.uuid] = driver_view;
-                  //PrivateRoomSnapshots[room_id] = RoomPrivateViewModel(ActiveRooms[room_id]);
                   io.emit("update", { type: _that.UpdateTypes.DRIVER_JOINED_ROOM, data: { track_id, room_id, driver_count: Snapshot[track_id].rooms[room_id].driver_count } });
                   ioadmin.emit("update", { type: _that.UpdateTypes.DRIVER_JOINED_ROOM, data: { track_id, room_id, driver_count: Snapshot[track_id].rooms[room_id].driver_count } });
                   io.to(room_id).emit("room-update", { type: _that.UpdateTypes.DRIVER_JOINED_ROOM, data: {  driver_view } });
@@ -740,17 +741,13 @@ function main(httpServer) {
             this.emitUpdate[this.UpdateTypes.DRIVER_LEFT_ROOM] = function (track_id, room_id, driver_id) {
                   Snapshot[track_id].rooms[room_id] = RoomPublicViewModel(ActiveRooms[room_id]);
                   delete PrivateRoomSnapshots[room_id].drivers[driver_id];
-                  //PrivateRoomSnapshots[room_id] = RoomPrivateViewModel(ActiveRooms[room_id]);
                   io.emit("update", { type: _that.UpdateTypes.DRIVER_LEFT_ROOM, data: { track_id, room_id, driver_count: Snapshot[track_id].rooms[room_id].driver_count } });
                   ioadmin.emit("update", { type: _that.UpdateTypes.DRIVER_LEFT_ROOM, data: { track_id, room_id, driver_count: Snapshot[track_id].rooms[room_id].driver_count } });
                   io.to(room_id).emit("room-update", { type: _that.UpdateTypes.DRIVER_LEFT_ROOM, data: { driver_id } });
             };
             this.emitUpdate[this.UpdateTypes.DRIVER_GOT_ONLINE] = function (track_id, room_id, driver_id) {
                   Snapshot[track_id].rooms[room_id] = RoomPublicViewModel(ActiveRooms[room_id]);
-                  console.log(room_id);
-                  console.log(driver_id);
                   PrivateRoomSnapshots[room_id].drivers[driver_id].status = Enum_Driver_Room_Status.NOT_READY;
-                  //PrivateRoomSnapshots[room_id] = RoomPrivateViewModel(ActiveRooms[room_id]);
                   io.emit("update", { type: _that.UpdateTypes.DRIVER_GOT_ONLINE, data: { track_id, room_id, driver_count: Snapshot[track_id].rooms[room_id].driver_count } });
                   ioadmin.emit("update", { type: _that.UpdateTypes.DRIVER_GOT_ONLINE, data: { track_id, room_id, driver_count: Snapshot[track_id].rooms[room_id].driver_count } });
                   io.to(room_id).emit("room-update", { type: _that.UpdateTypes.DRIVER_GOT_ONLINE, data: { driver_id } });
@@ -758,7 +755,6 @@ function main(httpServer) {
             this.emitUpdate[this.UpdateTypes.DRIVER_GOT_OFFLINE] = function (track_id, room_id, driver_id) {
                   Snapshot[track_id].rooms[room_id] = RoomPublicViewModel(ActiveRooms[room_id]);
                   PrivateRoomSnapshots[room_id].drivers[driver_id].status = Enum_Driver_Room_Status.OFFLINE;
-                  //PrivateRoomSnapshots[room_id] = RoomPrivateViewModel(ActiveRooms[room_id]);
                   io.emit("update", { type: _that.UpdateTypes.DRIVER_GOT_OFFLINE, data: { track_id, room_id, driver_count: Snapshot[track_id].rooms[room_id].driver_count } });
                   ioadmin.emit("update", { type: _that.UpdateTypes.DRIVER_GOT_OFFLINE, data: { track_id, room_id, driver_count: Snapshot[track_id].rooms[room_id].driver_count } });
                   io.to(room_id).emit("room-update", { type: _that.UpdateTypes.DRIVER_GOT_OFFLINE, data: { driver_id } });
@@ -766,7 +762,6 @@ function main(httpServer) {
             this.emitUpdate[this.UpdateTypes.DRIVER_IS_READY] = function (track_id, room_id, driver_id) {
                   Snapshot[track_id].rooms[room_id] = RoomPublicViewModel(ActiveRooms[room_id]);
                   PrivateRoomSnapshots[room_id].drivers[driver_id].status = Enum_Driver_Room_Status.READY;
-                  //PrivateRoomSnapshots[room_id] = RoomPrivateViewModel(ActiveRooms[room_id]);
                   io.emit("update", { type: _that.UpdateTypes.DRIVER_IS_READY, data: { track_id, room_id, driver_count: Snapshot[track_id].rooms[room_id].driver_count } });
                   ioadmin.emit("update", { type: _that.UpdateTypes.DRIVER_IS_READY, data: { track_id, room_id, driver_count: Snapshot[track_id].rooms[room_id].driver_count } });
                   io.to(room_id).emit("room-update", { type: _that.UpdateTypes.DRIVER_IS_READY, data: { driver_id } });
@@ -774,7 +769,6 @@ function main(httpServer) {
             this.emitUpdate[this.UpdateTypes.DRIVER_IS_NOT_READY] = function (track_id, room_id, driver_id) {
                   Snapshot[track_id].rooms[room_id] = RoomPublicViewModel(ActiveRooms[room_id]);
                   PrivateRoomSnapshots[room_id].drivers[driver_id].status = Enum_Driver_Room_Status.NOT_READY;
-                  //PrivateRoomSnapshots[room_id] = RoomPrivateViewModel(ActiveRooms[room_id]);
                   io.emit("update", { type: _that.UpdateTypes.DRIVER_IS_NOT_READY, data: { track_id, room_id, driver_count: Snapshot[track_id].rooms[room_id].driver_count } });
                   ioadmin.emit("update", { type: _that.UpdateTypes.DRIVER_IS_NOT_READY, data: { track_id, room_id, driver_count: Snapshot[track_id].rooms[room_id].driver_count } });
                   io.to(room_id).emit("room-update", { type: _that.UpdateTypes.DRIVER_IS_NOT_READY, data: { driver_id } });
@@ -902,6 +896,10 @@ function main(httpServer) {
                   }
             });
 
+            socket.on('disconnect', function () {
+               console.log('Admin got disconnected!');
+               delete ActiveAdmins[socket.admin.uuid];
+            });
             /* 
             Admin Commands
             
@@ -929,6 +927,10 @@ function main(httpServer) {
             });
 
             socket.on('getroominrace', (data, callback) => {
+               if(!ActiveTracks[data.track_id]){
+                  callback({ success: false, reason: Enum_Callback_Reason.NO_TRACK_WITH_GIVEN_ID });
+                  return;
+               }
                var room_in_race = PrivateRoomSnapshots[ActiveTracks[data.track_id].room_id_in_race];
                if(!room_in_race){
                      callback({ success: false, reason: Enum_Callback_Reason.NO_ROOM_IN_RACE });
@@ -944,41 +946,80 @@ function main(httpServer) {
             });
 
             socket.on('startrace', (data, callback) => {
+               if(!ActiveTracks[data.track_id]){
+                  callback({ success: false, reason: Enum_Callback_Reason.NO_TRACK_WITH_GIVEN_ID });
+                  return;
+               }
                   var room_in_race = ActiveRooms[ActiveTracks[data.track_id].room_id_in_race];
                   if(!room_in_race){
                         callback({ success: false, reason: Enum_Callback_Reason.NO_ROOM_IN_RACE });
                         return;
                   }
-                  //LS will give control to all drivers in the race and set race->is_started to TRUE;
-                  localServer.startRace(data.track_id, room_in_race.race.uuid);
+                  //LS will start streaming and give control to all drivers in the race and set race->is_started to TRUE;
+                  if(!localServer.startRace(data.track_id, room_in_race.race.uuid)){
+                     callback({ success: false, reason: Enum_Callback_Reason.LOCAL_SERVER_IS_DOWN });
+                     return;
+                  }
             });
 
             socket.on('pauserace', (data, callback) => {
+               if(!ActiveTracks[data.track_id]){
+                  callback({ success: false, reason: Enum_Callback_Reason.NO_TRACK_WITH_GIVEN_ID });
+                  return;
+               }
                   var room_in_race = ActiveRooms[ActiveTracks[data.track_id].room_id_in_race];
                   if(!room_in_race){
                         callback({ success: false, reason: Enum_Callback_Reason.NO_ROOM_IN_RACE });
                         return;
                   }
                   //LS will set race->is_paused to TRUE and stop increasing race->elapsed_time.
-                  localServer.pauseRace(data.track_id, room_in_race.race.uuid);
+                  if(!localServer.pauseRace(data.track_id, room_in_race.race.uuid)){
+                     callback({ success: false, reason: Enum_Callback_Reason.LOCAL_SERVER_IS_DOWN });
+                     return;
+                  }
             });
 
             socket.on('resumerace', (data, callback) => {
+               if(!ActiveTracks[data.track_id]){
+                  callback({ success: false, reason: Enum_Callback_Reason.NO_TRACK_WITH_GIVEN_ID });
+                  return;
+               }
                   //LS will set race->is_paused to FALSE to remove controls and to stop increasing race->elapsed_time.
-                  localServer.resumeRace(data.track_id, data.race_id);
+                  if(!localServer.resumeRace(data.track_id, data.race_id)){
+                     callback({ success: false, reason: Enum_Callback_Reason.LOCAL_SERVER_IS_DOWN });
+                     return;
+                  }
             });
             socket.on('endrace', (data, callback) => {
+               if(!ActiveTracks[data.track_id]){
+                  callback({ success: false, reason: Enum_Callback_Reason.NO_TRACK_WITH_GIVEN_ID });
+                  return;
+               }
                   //LS will calculate ratings and send them to both drivers and Web Server. Then, LS will disconnect drivers.
-                  localServer.endRace(data.track_id, data.race_id);
+                  if(!localServer.endRace(data.track_id, data.race_id)){
+                     callback({ success: false, reason: Enum_Callback_Reason.LOCAL_SERVER_IS_DOWN });
+                     return;
+                  }
             });
 
             socket.on('abortrace', (data, callback) => {
+               if(!ActiveTracks[data.track_id]){
+                  callback({ success: false, reason: Enum_Callback_Reason.NO_TRACK_WITH_GIVEN_ID });
+                  return;
+               }
                   //LS will send a abort message to drivers and disconnect them and remove race.
-                  localServer.abortRace(data.track_id, data.race_id);
+                  if(!localServer.abortRace(data.track_id, data.race_id)){
+                     callback({ success: false, reason: Enum_Callback_Reason.LOCAL_SERVER_IS_DOWN });
+                     return;
+                  }
             });
 
             socket.on('takenextroomin', (data, callback) => {
                   //If the current room is still in race, return false with reason STILL_IN_RACE.
+                  if(!ActiveTracks[data.track_id]){
+                     callback({ success: false, reason: Enum_Callback_Reason.NO_TRACK_WITH_GIVEN_ID });
+                     return;
+                  }
                   if(ActiveTracks[data.track_id].room_id_in_race){
                         var room_in_race = ActiveRooms[ActiveTracks[data.track_id].room_id_in_race];
                         if(room_in_race.status != Enum_Room_Status.IN_RACE_RESULT){
@@ -997,82 +1038,178 @@ function main(httpServer) {
                         return;
                   }
                   room.status = Enum_Room_Status.IN_PRE_RACE;
+                  room.race = {
+                     uuid: uuidv4(),
+                     status: Enum_Race_Status.NOT_STARTED,
+                     driver_cars: {}
+                  };
+                  var driver_ids = [];
+                  for(var driver_id in room.drivers){
+                     driver_ids.push(driver_id);
+                     room.race.driver_cars[driver_id] = {streamed_car_id: null, controlled_car_id: null};
+                  }
                   room.save();
 
-                  var driver_ids = [];
-                  for(var driver_id in room.drivers)
-                        driver_ids.push(driver_id);
+                  ActiveTracks[data.track_id].room_id_in_race = room.uuid;
+                  ActiveTracks[data.track_id].save();
 
-                  var race_id = uuidv4();
+
                   //Send createrace command to LS with driver ids.
-                  localServer.createRace(data.track_id, race_id, data.max_duration, driver_ids);
-                  callback({ success: true, race_id, room_private_view: RoomPrivateViewModel(room) });
+                  if(!localServer.createRace(data.track_id, room.race.uuid, data.max_duration, driver_ids)){
+                     callback({ success: false, reason: Enum_Callback_Reason.LOCAL_SERVER_IS_DOWN });
+                     return;
+                  }
+                  callback({ success: true, race_id: room.race.uuid, room_private_view: PrivateRoomSnapshots[room.uuid] });
                   UpdateManager.emitUpdate[UpdateManager.UpdateTypes.ROOM_ENTERED_RACE](room.track_id, room.uuid);
             });
 
             socket.on('controlcar', (data, callback) => {
-                  localServer.controlCar(data.track_id, data.car_id, data.throttle, data.steering);
+               if(!ActiveTracks[data.track_id]){
+                  callback({ success: false, reason: Enum_Callback_Reason.NO_TRACK_WITH_GIVEN_ID });
+                  return;
+               }
+               if(!localServer.controlCar(data.track_id, data.car_id, data.throttle, data.steering)){
+                  callback({ success: false, reason: Enum_Callback_Reason.LOCAL_SERVER_IS_DOWN });
+                  return;
+               }
             });
 
             socket.on('removedriver', (data, callback) => {
+               if(!ActiveTracks[data.track_id]){
+                  callback({ success: false, reason: Enum_Callback_Reason.NO_TRACK_WITH_GIVEN_ID });
+                  return;
+               }
                   //Remove Driver from the room and disconnect from LS. Direct him to result screen and show him as kicked.
-                  localServer.RemoveDriverFromRoom(data.track_id, data.driver_id);
+                  if(!localServer.RemoveDriverFromRoom(data.track_id, data.driver_id)){
+                     callback({ success: false, reason: Enum_Callback_Reason.LOCAL_SERVER_IS_DOWN });
+                     return;
+                  }
             });
 
             socket.on('connecttodrivermodified', (data, callback) => {
+               if(!ActiveTracks[data.track_id]){
+                  callback({ success: false, reason: Enum_Callback_Reason.NO_TRACK_WITH_GIVEN_ID });
+                  return;
+               }
                   //Tell LS to stream Car camera to the Driver.
-                  localServer.connectToDriver(data.track_id, data.driver_id);
+                  if(!localServer.connectToDriver(data.track_id, data.driver_id)){
+                     callback({ success: false, reason: Enum_Callback_Reason.LOCAL_SERVER_IS_DOWN });
+                     return;
+                  }
                   callback({success: true});
             });
             socket.on('watch', (data, callback) => {
+               if(!ActiveTracks[data.track_id]){
+                  callback({ success: false, reason: Enum_Callback_Reason.NO_TRACK_WITH_GIVEN_ID });
+                  return;
+               }
                   //This is a temporary function.
                   //Tell LS to stream Car camera to the Driver.
-                  localServer.watch(data.track_id, data.driver_id);
+                  if(!localServer.watch(data.track_id, data.driver_id)){
+                     callback({ success: false, reason: Enum_Callback_Reason.LOCAL_SERVER_IS_DOWN });
+                     return;
+                  }
                   ActiveDrivers[data.driver_id].driver.status = Enum_Driver_Status.CONNECTED_TO_LOCAL_SERVER;
                   ActiveDrivers[data.driver_id].driver.save();
                   callback({success: true});
             });
             socket.on('setdriverofcar', (data, callback) => {
+               if(!ActiveTracks[data.track_id]){
+                  callback({ success: false, reason: Enum_Callback_Reason.NO_TRACK_WITH_GIVEN_ID });
+                  return;
+               }
                   //Tell LS to stream Car camera to the Driver.
-                  localServer.setDriverOfCar(data.track_id, data.driver_id, data.car_id);
+                  if(!localServer.setDriverOfCar(data.track_id, data.driver_id, data.car_id)){
+                     callback({ success: false, reason: Enum_Callback_Reason.LOCAL_SERVER_IS_DOWN });
+                     return;
+                  }
                   callback({success: true});
             });
             socket.on('startrecording', (data, callback) => {
+               if(!ActiveTracks[data.track_id]){
+                  callback({ success: false, reason: Enum_Callback_Reason.NO_TRACK_WITH_GIVEN_ID });
+                  return;
+               }
                   //Tell LS to stream Car camera to the Driver.
-                  localServer.startRecording(data.track_id, data.driver_id);
+                  if(!localServer.startRecording(data.track_id, data.driver_id)){
+                     callback({ success: false, reason: Enum_Callback_Reason.LOCAL_SERVER_IS_DOWN });
+                     return;
+                  }
                   callback({success: true});
             });
 
             socket.on('stoprecording', (data, callback) => {
+               if(!ActiveTracks[data.track_id]){
+                  callback({ success: false, reason: Enum_Callback_Reason.NO_TRACK_WITH_GIVEN_ID });
+                  return;
+               }
                   //Tell LS to stream Car camera to the Driver.
-                  localServer.stopRecording(data.track_id, data.driver_id);
+                  if(!localServer.stopRecording(data.track_id, data.driver_id)){
+                     callback({ success: false, reason: Enum_Callback_Reason.LOCAL_SERVER_IS_DOWN });
+                     return;
+                  }
                   callback({success: true});
             });
 
             socket.on('streamtodrivermodified', (data, callback) => {
+               if(!ActiveTracks[data.track_id]){
+                  callback({ success: false, reason: Enum_Callback_Reason.NO_TRACK_WITH_GIVEN_ID });
+                  return;
+               }
                   //Tell LS to stream Car camera to the Driver.
-                  localServer.streamToDriverModified(data.track_id, data.driver_id);
+                  if(!localServer.streamToDriverModified(data.track_id, data.driver_id)){
+                     callback({ success: false, reason: Enum_Callback_Reason.LOCAL_SERVER_IS_DOWN });
+                     return;
+                  }
                   callback({success: true});
             });
 
             socket.on('streamtodriver', (data, callback) => {
+               if(!ActiveTracks[data.track_id]){
+                  callback({ success: false, reason: Enum_Callback_Reason.NO_TRACK_WITH_GIVEN_ID });
+                  return;
+               }
                   //Tell LS to stream Car camera to the Driver.
-                  localServer.streamToDriver(data.track_id, data.driver_id, data.car_id);
+                  if(!localServer.streamToDriver(data.track_id, data.driver_id, data.car_id)){
+                     callback({ success: false, reason: Enum_Callback_Reason.LOCAL_SERVER_IS_DOWN });
+                     return;
+                  }
             });
 
             socket.on('stopstream', (data, callback) => {
+               if(!ActiveTracks[data.track_id]){
+                  callback({ success: false, reason: Enum_Callback_Reason.NO_TRACK_WITH_GIVEN_ID });
+                  return;
+               }
                   //Tell LS to stop streaming to this Driver.
-                  localServer.stopStreamToDriver(data.track_id, data.driver_id);
+                  if(!localServer.stopStreamToDriver(data.track_id, data.driver_id)){
+                     callback({ success: false, reason: Enum_Callback_Reason.LOCAL_SERVER_IS_DOWN });
+                     return;
+                  }
             });
 
             socket.on('givecontrol', (data, callback) => {
+               if(!ActiveTracks[data.track_id]){
+                  callback({ success: false, reason: Enum_Callback_Reason.NO_TRACK_WITH_GIVEN_ID });
+                  return;
+               }
                   //Tell LS to give control of the Car to this Driver.
-                  localServer.giveControlToDriver(data.track_id, data.driver_id);
+                  if(!localServer.giveControlToDriver(data.track_id, data.driver_id)){
+                     callback({ success: false, reason: Enum_Callback_Reason.LOCAL_SERVER_IS_DOWN });
+                     return;
+                  }
             });
 
             socket.on('cutcontrol', (data, callback) => {
+               if(!ActiveTracks[data.track_id]){
+                  callback({ success: false, reason: Enum_Callback_Reason.NO_TRACK_WITH_GIVEN_ID });
+                  return;
+               }
                   //Tell LS to remove control of the Car of this Driver.
-                  localServer.cutControlOfDriver(data.track_id, data.driver_id);
+                  if(!localServer.cutControlOfDriver(data.track_id, data.driver_id)){
+                     callback({ success: false, reason: Enum_Callback_Reason.LOCAL_SERVER_IS_DOWN });
+                     return;
+                  }
             });
 
       });
@@ -1090,6 +1227,7 @@ function createNewToken(data, expiresIn) {
 var localServerCallbacks = {
       on_firstconnection: function(track_id){
             //This is when LS gets its first connection from Web Server after LS restarted. If there is a room in race we need to send create race command.
+            localServer.setTrackLines(track_id, [1,2,3,4,5], [6,7,8,9,1]);
       },
       on_offer: function (track_id, driverId, sdp, isleft) {
             //COMMENT OUT HERE #################################################
@@ -1185,7 +1323,11 @@ var RoomPrivateViewModel = function (room) {
             status: room.status,
             drivers: {},
             is_locked: room.password != null && room.password != "",
-            chat: []
+            chat: [],
+            race: room.race ? {
+               uuid: room.race.uuid,
+               ranking: room.race.ranking
+            } : null
       };
       for(var c=0;c<room.chat.length;c++){
             model.chat.push(room.chat[c]);
