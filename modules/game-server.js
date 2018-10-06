@@ -181,10 +181,11 @@ module.exports.start = function (httpServer) {
                                     uuid: rooms[r].uuid,
                                     track_id: rooms[r].track_id,
                                     drivers: {}, //{ uuid: username }
-                                    ranking: rooms[r].race.ranking
+                                    ranking: []
                               };
-                              // for(var r=0;r<rooms[r].race.ranking.length;r++)
-                              //       Snapshot[track.uuid].room_in_race.ranking[r] = rooms[r].race.ranking[r];
+                              if(rooms[r].race && rooms[r].race.ranking)
+                                 for(var r=0;r<rooms[r].race.ranking.length;r++)
+                                    Snapshot[track.uuid].room_in_race.ranking[r] = rooms[r].race.ranking[r];
                         }
 
                         ActiveRooms[rooms[r].uuid] = rooms[r];
