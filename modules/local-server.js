@@ -78,7 +78,7 @@ module.exports = {
    sendMessage: function (track_id, msg) {
      var ws = wsSocketList[track_id];
      console.log(track_id);
-      if (ws && ws.readyState == ws.OPEN){
+      if (this.isServerUp(track_id)){
          ws.send(typeof msg === 'string' ? msg : JSON.stringify(msg));
          console.log("Sent message to Local Sever -> " + (typeof msg === 'string' ? msg : JSON.stringify(msg)));
          return true;
@@ -86,6 +86,9 @@ module.exports = {
          console.log("Cannot send message to LS. Connection is DOWN!");
          return false;
       }
+   },
+   isServerUp: function(track_id){
+      return wsSocketList[track_id] && wsSocketList[track_id].readyState == WebSocket.OPEN;
    },
    setTrackLines: function (track_id, list1, list2) {
       return this.sendMessage(track_id, { command: "settracklines", list1, list2 });

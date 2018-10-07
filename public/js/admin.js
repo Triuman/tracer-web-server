@@ -60,7 +60,7 @@ window.onload = function () {
    socket.on('connect', () => {
       console.log("Socket connected");
       //Try to login if we have token in the local storage
-      var token = localStorage.getItem("token");
+      var token = localStorage.getItem("admintoken");
       if (token)
          Authenticate(token);
    });
@@ -84,18 +84,24 @@ window.onload = function () {
       UpdateHandler[update.type](update.data);
    });
 
-   socket.on('room_in_race', (room_in_race) => {
+   socket.on('roominrace', (data) => {
+      var room_in_race = data.room_in_race;
       console.log("Got room_in_race! -> ");
       console.log(room_in_race);
+      
+      activeTrack.room_in_race = room_in_race;
+
       //Put names on the list view
       for(var i=1;i<=4;i++){
          $("#txtDriverName" + i).html("EMPTY");
          $("#txtDriverName" + i).data("uuid", "");
+         $("#txtDriverName" + i).attr("style", "margin-bottom: 30px;color: gray;");
       }
       var driverNo = 1;
       for(var driverId in room_in_race.drivers){
          $("#txtDriverName" + driverNo).html(room_in_race.drivers[driverId].username);
          $("#txtDriverName" + driverNo).data("uuid", driverId);
+         $("#txtDriverName" + driverNo).attr("style", "margin-bottom: 30px;");
          driverNo++;
 
          if($("#txtCarName" + driverNo).data("uuid")!="")
@@ -110,15 +116,16 @@ window.onload = function () {
       for(var i=1;i<=4;i++){
          $("#txtCarName" + i).html("EMPTY");
          $("#txtCarName" + i).data("uuid", "");
+         $("#txtCarName" + i).attr("style", "margin-bottom: 30px;color: gray;");
       }
       var carNo = 1;
       for(var carId in cars){
          $("#txtCarName" + carNo).html(cars[carId].name);
          $("#txtCarName" + carNo).data("uuid", carId);
-         carNo++;
-
+         $("#txtCarName" + carNo).attr("style", "margin-bottom: 30px;");
          if($("#txtDriverName" + carNo).data("uuid")!="")
             SetDriverOfCar(activeTrack.uuid, $("#txtDriverName" + carNo).data("uuid"), carId);
+         carNo++;
       }
    });
 
@@ -160,6 +167,12 @@ window.onload = function () {
    $("#btnAbortRace").click(function(){
       AbortRace(activeTrack.uuid);
    });
+   
+   $('#btnLogin').on('click', function () {
+      Authenticate($('#txtLoginEmail').val(), $('#txtLoginPassword').val());
+      $('#modalLogin').modal('hide');
+   });
+   
 }
 
 function OnEyeClick(eyeNo){
@@ -480,15 +493,27 @@ function Authenticate(u, p) {
       socket.emit("authenticate", { token: u }, (data) => {
          console.log("Are we authenticated? -> ");
          console.log(data);
-         if (data.success)
+         if (data.success){
             GetSnapshot();
+            localStorage.setItem("admintoken", data.token);
+         }
+         else{
+            //remove token from the local storage
+            localStorage.removeItem("admintoken");
+         }
       });
    } else {
       socket.emit("authenticate", { username: u, password: p }, (data) => {
          console.log("Are we authenticated? -> ");
          console.log(data);
-         if (success)
+         if (data.success){
             GetSnapshot();
+            localStorage.setItem("admintoken", data.token);
+         }
+         else{
+            //remove token from the local storage
+            localStorage.removeItem("admintoken");
+         }
       });
    }
 }
@@ -499,19 +524,19 @@ function GetSnapshot() {
 
 function TakeNextRoomIn(track_id) {
    socket.emit("takenextroomin", { track_id }, (data) => {
-      console.log("Did we got room info? -> ");
+      console.log("Did we take a new room to the race? -> ");
       console.log(data);
       
       if(!data.success)
          return;
 
-      activeTrack.room_in_race = data.room_private_view;
-      var i=0;
-      for(var driver_id in data.room_private_view.drivers){
-         i++;
-         $("#txtDriverName" + i).html(data.room_private_view.drivers[driver_id].username);
-         $("#txtDriverName" + i).data("uuid", driver_id);
-      }
+      // activeTrack.room_in_race = data.room_private_view;
+      // var i=0;
+      // for(var driver_id in data.room_private_view.drivers){
+      //    i++;
+      //    $("#txtDriverName" + i).html(data.room_private_view.drivers[driver_id].username);
+      //    $("#txtDriverName" + i).data("uuid", driver_id);
+      // }
    });
 }
 
@@ -529,6 +554,13 @@ function PauseRace(track_id) {
    });
 }
 
+function ResumeRace(track_id) {
+   socket.emit("resumerace", { track_id }, (data) => {
+      console.log("Did we resume the race? -> ");
+      console.log(data);
+   });
+}
+
 function AbortRace(track_id) {
    socket.emit("abortrace", { track_id }, (data) => {
       console.log("Did we abort the race? -> ");
@@ -537,15 +569,15 @@ function AbortRace(track_id) {
 }
 
 function KickDriverOut(race_id, driver_id) {
-   socket.emit("kick-driver-out", { race_id, driver_id }, (data) => {
-      console.log("Did we send chat to the room? -> ");
+   socket.emit("kickdriverout", { race_id, driver_id }, (data) => {
+      console.log("Did we kick the driver out of the room? -> ");
       console.log(data);
    });
 }
 
 function StartAllStreams(chat) {
-   socket.emit("start-all-streams", { track_id }, (data) => {
-      console.log("Did we send chat to everyone? -> ");
+   socket.emit("startallstreams", { track_id }, (data) => {
+      console.log("Did we start all stream? -> ");
       console.log(data);
    });
 }

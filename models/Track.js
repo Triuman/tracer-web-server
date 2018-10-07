@@ -6,6 +6,7 @@ var trackSchema = new mongoose.Schema({
    name: {type: String, required: true},
    server_address: {type: String, required: false},
    status: {type: Number, required: true},
+   is_active: {type: Boolean, required: true},
    room_id_in_race: {type: String, required: false}
 });
 

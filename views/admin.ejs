@@ -1,124 +1,124 @@
 <!DOCTYPE html>
 
 <head>
-    <title>Tracer League</title>
-    <meta name="description" content="">
-    <meta name="keywords" content="">
+   <title>Tracer League</title>
+   <meta name="description" content="">
+   <meta name="keywords" content="">
 
-    <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=0">
-    <meta name="msapplication-TileColor" content="#40618f">
-    <meta name="msapplication-TileImage" content="mstile_144x144.png">
-    <meta name="format-detection" content="telephone=no">
+   <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=0">
+   <meta name="msapplication-TileColor" content="#40618f">
+   <meta name="msapplication-TileImage" content="mstile_144x144.png">
+   <meta name="format-detection" content="telephone=no">
 
-    <link rel="canonical" href="">
+   <link rel="canonical" href="">
 
-    <script src="/public/js/jquery.min.js"></script>
-    <script src="/public/js/tether.min.js"></script>
-    <script src="/public/js/bootstrap.min.js"></script>
-    <script src="/public/plugins/owl-carousel/js/owl.carousel.min.js"></script>
-    <script src="/public/plugins/social/assets/javascripts/socialShare.min.js"></script>
+   <script src="/public/js/jquery.min.js"></script>
+   <script src="/public/js/tether.min.js"></script>
+   <script src="/public/js/bootstrap.min.js"></script>
+   <script src="/public/plugins/owl-carousel/js/owl.carousel.min.js"></script>
+   <script src="/public/plugins/social/assets/javascripts/socialShare.min.js"></script>
 
-    <script src="/public/js/main.js"></script>
+   <script src="/public/js/main.js"></script>
 
-    <script src="/socket.io/socket.io.js"></script>
-    <script src="/public/js/admin.js"></script>
+   <script src="/socket.io/socket.io.js"></script>
+   <script src="/public/js/admin.js"></script>
 
-    <link href="/public/css/tether.min.css" rel="stylesheet">
-    <link href="/public/css/tether-theme-basic.min.css" rel="stylesheet">
-    <link href="/public/css/bootstrap.min.css" rel="stylesheet">
-    <link href="/public/css/font-awesome.min.css" rel="stylesheet">
-    <link href="/public/plugins/owl-carousel/css/owl.carousel.css" rel="stylesheet">
-    <link href="/public/plugins/social/assets/stylesheets/arthref.min.css" rel="stylesheet">
-    <link href="/public/css/style.css" rel="stylesheet">
+   <link href="/public/css/tether.min.css" rel="stylesheet">
+   <link href="/public/css/tether-theme-basic.min.css" rel="stylesheet">
+   <link href="/public/css/bootstrap.min.css" rel="stylesheet">
+   <link href="/public/css/font-awesome.min.css" rel="stylesheet">
+   <link href="/public/plugins/owl-carousel/css/owl.carousel.css" rel="stylesheet">
+   <link href="/public/plugins/social/assets/stylesheets/arthref.min.css" rel="stylesheet">
+   <link href="/public/css/style.css" rel="stylesheet">
 </head>
 
 <body>
 
-    <div class="header">
-        <div class="col-md-12">
-            <div class="row">
-                <div class="col-md-3">
-                    <div class="logo">
-                        <a href="">
-                            <img style="height: 38px; margin-top: 6px; margin-left: 24px;" src="/public/images/TracerLogoGray.png"
-                                alt="">
-                        </a>
-                    </div>
-                </div>
-                <div class="col-md-6">
-                </div>
-                <div class="col-md-3">
-                    <div class="premium">
-                        <p class="premium-title">TRACER®Access </p>
-                        <div class="signed-out">
-                            <a href="javascript:void(0)" class="sign-in" data-toggle="modal" data-target="#modalLogin">Sign
-                                in</a>
-                        </div>
-                    </div>
-                    <div class="dropdown profile">
-                        <button class="btn dropdown-toggle" type="button" id="dropdownMenuButton" data-toggle="dropdown">
-                            <div class="avatar">
-                                <img src="/public/images/user/20.jpg">
-                            </div>
-                            <div class="name">
-                                <h6 id="divUsername">Triuman</h6>
-                                <p>
-                                    <i class="fa fa-database fa-fw"></i><span id="divCoin">12</span> coin</p>
-                            </div>
-                        </button>
-                        <div class="dropdown-menu" aria-labelledby="dropdownMenuButton">
-                            <a class="dropdown-item" href="#">Profile</a>
-                            <a class="dropdown-item" href="#">Messages</a>
-                            <a class="dropdown-item" href="#" id="btnLogout">Sign Out</a>
-                        </div>
-                    </div>
-                </div>
+   <div class="header">
+      <div class="col-md-12">
+         <div class="row">
+            <div class="col-md-3">
+               <div class="logo">
+                  <a href="">
+                     <img style="height: 38px; margin-top: 6px; margin-left: 24px;" src="/public/images/TracerLogoGray.png"
+                        alt="">
+                  </a>
+               </div>
             </div>
-        </div>
-    </div>
-    <div>
+            <div class="col-md-6">
+            </div>
+            <div class="col-md-3">
+               <div class="premium">
+                  <p class="premium-title">TRACER®Access </p>
+                  <div class="signed-out">
+                     <a href="javascript:void(0)" class="sign-in" data-toggle="modal" data-target="#modalLogin">Sign
+                        in</a>
+                  </div>
+               </div>
+               <div class="dropdown profile">
+                  <button class="btn dropdown-toggle" type="button" id="dropdownMenuButton" data-toggle="dropdown">
+                     <div class="avatar">
+                        <img src="/public/images/user/20.jpg">
+                     </div>
+                     <div class="name">
+                        <h6 id="divUsername">Triuman</h6>
+                        <p>
+                           <i class="fa fa-database fa-fw"></i><span id="divCoin">12</span> coin</p>
+                     </div>
+                  </button>
+                  <div class="dropdown-menu" aria-labelledby="dropdownMenuButton">
+                     <a class="dropdown-item" href="#">Profile</a>
+                     <a class="dropdown-item" href="#">Messages</a>
+                     <a class="dropdown-item" href="#" id="btnLogout">Sign Out</a>
+                  </div>
+               </div>
+            </div>
+         </div>
+      </div>
+   </div>
+   <div>
 
-        <div style="position: fixed;top: 50px;margin: 40px 0px 0px 100px;">
-            <div style="float:left;">
-                <div style="margin-left: 35%;font-size: 20px;">Drivers</div>
-                <div class="list-group" style="float:left;border: black 2px solid;padding: 20px;font-size: 20px;">
-                    <a id="txtDriverName1" href="#" class="list-group-item" style="margin-bottom: 30px;color: gray;">EMPTY</a>
-                    <a id="txtDriverName2" href="#" class="list-group-item" style="margin-bottom: 30px;color: gray;">EMPTY</a>
-                    <a id="txtDriverName3" href="#" class="list-group-item" style="margin-bottom: 30px;color: gray;">EMPTY</a>
-                    <a id="txtDriverName4" href="#" class="list-group-item" style="color: gray;">EMPTY</a>
-                </div>
+      <div style="position: fixed;top: 50px;margin: 40px 0px 0px 100px;">
+         <div style="float:left;">
+            <div style="margin-left: 35%;font-size: 20px;">Drivers</div>
+            <div class="list-group" style="float:left;border: black 2px solid;padding: 20px;font-size: 20px;">
+               <a id="txtDriverName1" href="#" class="list-group-item" style="margin-bottom: 30px;color: gray;">EMPTY</a>
+               <a id="txtDriverName2" href="#" class="list-group-item" style="margin-bottom: 30px;color: gray;">EMPTY</a>
+               <a id="txtDriverName3" href="#" class="list-group-item" style="margin-bottom: 30px;color: gray;">EMPTY</a>
+               <a id="txtDriverName4" href="#" class="list-group-item" style="color: gray;">EMPTY</a>
             </div>
-            <div style="float:left;margin: 40px;">
-                <div>
-                    <input type="image" id="imgEye1" src="/public/images/eyeClosed.png" style="width:50px;margin-right: 20px;">
-                    <input type="image" id="imgControl1" src="/public/images/controlCut.png" style="width:50px;">
-                </div>
-                <hr>
-                <div>
-                    <input type="image" id="imgEye2" src="/public/images/eyeClosed.png" style="width:50px;margin-right: 20px;">
-                    <input type="image" id="imgControl2" src="/public/images/controlCut.png" style="width:50px;">
-                </div>
-                <hr>
-                <div>
-                    <input type="image" id="imgEye3" src="/public/images/eyeClosed.png" style="width:50px;margin-right: 20px;">
-                    <input type="image" id="imgControl3" src="/public/images/controlCut.png" style="width:50px;">
-                </div>
-                <hr>
-                <div>
-                    <input type="image" id="imgEye4" src="/public/images/eyeClosed.png" style="width:50px;margin-right: 20px;">
-                    <input type="image" id="imgControl4" src="/public/images/controlCut.png" style="width:50px;">
-                </div>
+         </div>
+         <div style="float:left;margin: 40px;">
+            <div>
+               <input type="image" id="imgEye1" src="/public/images/eyeClosed.png" style="width:50px;margin-right: 20px;">
+               <input type="image" id="imgControl1" src="/public/images/controlCut.png" style="width:50px;">
             </div>
-            <div style="float:left;">
-                <div style="margin-left: 35%;font-size: 20px;">Cars</div>
-                <div class="list-group" style="float:left;border: black 2px solid;padding: 20px;font-size: 20px;">
-                    <a id="txtCarName1" href="#" class="list-group-item" style="margin-bottom: 30px;color: gray;">EMPTY</a>
-                    <a id="txtCarName2" href="#" class="list-group-item" style="margin-bottom: 30px;color: gray;">EMPTY</a>
-                    <a id="txtCarName3" href="#" class="list-group-item" style="margin-bottom: 30px;color: gray;">EMPTY</a>
-                    <a id="txtCarName4" href="#" class="list-group-item" style="color: gray;">EMPTY</a>
-                </div>
+            <hr>
+            <div>
+               <input type="image" id="imgEye2" src="/public/images/eyeClosed.png" style="width:50px;margin-right: 20px;">
+               <input type="image" id="imgControl2" src="/public/images/controlCut.png" style="width:50px;">
             </div>
-            <!-- <div style="float:left;margin-left: 30px;">
+            <hr>
+            <div>
+               <input type="image" id="imgEye3" src="/public/images/eyeClosed.png" style="width:50px;margin-right: 20px;">
+               <input type="image" id="imgControl3" src="/public/images/controlCut.png" style="width:50px;">
+            </div>
+            <hr>
+            <div>
+               <input type="image" id="imgEye4" src="/public/images/eyeClosed.png" style="width:50px;margin-right: 20px;">
+               <input type="image" id="imgControl4" src="/public/images/controlCut.png" style="width:50px;">
+            </div>
+         </div>
+         <div style="float:left;">
+            <div style="margin-left: 35%;font-size: 20px;">Cars</div>
+            <div class="list-group" style="float:left;border: black 2px solid;padding: 20px;font-size: 20px;">
+               <a id="txtCarName1" href="#" class="list-group-item" style="margin-bottom: 30px;color: gray;">EMPTY</a>
+               <a id="txtCarName2" href="#" class="list-group-item" style="margin-bottom: 30px;color: gray;">EMPTY</a>
+               <a id="txtCarName3" href="#" class="list-group-item" style="margin-bottom: 30px;color: gray;">EMPTY</a>
+               <a id="txtCarName4" href="#" class="list-group-item" style="color: gray;">EMPTY</a>
+            </div>
+         </div>
+         <!-- <div style="float:left;margin-left: 30px;">
                 <div style="margin: 110px 0px 20px 0px;"><input type="image" src="/public/images/arrowIn.png" style="width: 50px;" /></div>
                 <div><input type="image" src="/public/images/arrowOut.png" style="width: 50px;" /></div>
             </div>
@@ -131,114 +131,117 @@
                     <a id="txtUnusedCarName4" href="#" class="list-group-item" style="color: gray;">EMPTY</a>
                 </div>
             </div> -->
-            <div style="clear: both;"></div>
+         <div style="clear: both;"></div>
+         <div>
+            <input id="btnTakeNextRoomIn" type="button" value="Take Next Room In" style="font-size: 25px;height: 40px;width: 260px;">
+            <input id="btnStartRace" type="button" value="Start Race" style="font-size: 25px;height: 40px;width: 180px;">
+            <input id="btnPauseRace" type="button" value="Pause Race" style="font-size: 25px;height: 40px;width: 180px;">
+            <input id="btnAbortRace" type="button" value="Abort Race" style="font-size: 25px;height: 40px;width: 180px;">
+         </div>
+
+         <div style="margin-top: 40px;">
+            <span style="font-size:30px;">Room List</span>
             <div>
-                <input id="btnTakeNextRoomIn" type="button" value="Take Next Room In" style="font-size: 25px;height: 40px;width: 260px;">
-                <input id="btnStartRace" type="button" value="Start Race" style="font-size: 25px;height: 40px;width: 180px;">
-                <input id="btnPauseRace" type="button" value="Pause Race" style="font-size: 25px;height: 40px;width: 180px;">
-                <input id="btnAbortRace" type="button" value="Abort Race" style="font-size: 25px;height: 40px;width: 180px;">
-            </div>
-
-            <div style="margin-top: 40px;">
-                <span style="font-size:30px;">Room List</span>
-                <div>
-                    <div id="divRoomList" class="list-group" style="float:left;border: black 2px solid;padding: 20px;font-size: 20px;width: 100%;">
-                        <a href="#" class="list-group-item" style="margin-bottom: 30px;width: 880px;">
-                            <div>Room 1
-                                <div style="float:right;">
-                                    <i class="fa fa-car" style="color:#ffc534;" data-toggle="tooltip" title=""
-                                        data-original-title="Not Ready"></i>
-                                    <i class="fa fa-car" style="color:#0acc0a;" data-toggle="tooltip" title=""
-                                        data-original-title="Not Ready"></i>
-                                    <i class="fa fa-car" style="color:gray;" data-toggle="tooltip" title=""
-                                        data-original-title="Not Ready"></i>
-                                    <i class="fa fa-car" data-toggle="tooltip" title="" data-original-title="Not Ready"></i>
-                                </div>
-                            </div>
-                        </a>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <!-- Sidebar Right -->
-        <div class="sidebar-right">
-            <div class="chat">
-                <div class="chat-tab">
-                    <ul>
-                        <li id="btnGlobalChat" class="active">
-                            <a href="javascript:void(0)">Global Chat</a>
-                        </li>
-                        <li id="btnRoomChat">
-                            <a href="javascript:void(0)">Room Chat</a>
-                        </li>
-                    </ul>
-                </div>
-                <div id="divGlobalChat" class="chat-content">
-                </div>
-                <div id="divRoomChat" style="display: none;" class="chat-content">
-                </div>
-                <div id="divChatTextArea" class="chat-box">
-                    <textarea id="txtChat" placeholder="Bir mesaj gönderin"></textarea>
-                    <button id="btnSendChat" class="btn btn-primary">
-                        <i class="fa fa-paper-plane-o"></i>
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Login -->
-    <div class="modal" id="modalLogin" tabindex="-1">
-        <div class="modal-dialog" role="document">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">Login</h5>
-                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-                        <span aria-hidden="true">×</span>
-                    </button>
-                </div>
-                <div class="modal-body">
-                    <div>
-                        <div class="form-group">
-                            <label for="txtLoginEmail" class="form-control-label">Email</label>
-                            <input type="text" class="form-control" id="txtLoginEmail">
+               <div id="divRoomList" class="list-group" style="float:left;border: black 2px solid;padding: 20px;font-size: 20px;width: 100%;">
+                  <a href="#" class="list-group-item" style="margin-bottom: 30px;width: 880px;">
+                     <div>Room 1
+                        <div style="float:right;">
+                           <i class="fa fa-car" style="color:#ffc534;" data-toggle="tooltip" title=""
+                              data-original-title="Not Ready"></i>
+                           <i class="fa fa-car" style="color:#0acc0a;" data-toggle="tooltip" title=""
+                              data-original-title="Not Ready"></i>
+                           <i class="fa fa-car" style="color:gray;" data-toggle="tooltip" title="" data-original-title="Not Ready"></i>
+                           <i class="fa fa-car" data-toggle="tooltip" title="" data-original-title="Not Ready"></i>
                         </div>
-                        <div class="form-group">
-                            <label for="txtLoginPassword" class="form-control-label">Password</label>
-                            <input type="text" class="form-control" id="txtLoginPassword">
-                        </div>
-                        <button type="button" id="btnLogin" class="btn btn-primary">Login</button>
-
-                    </div>
-                </div>
+                     </div>
+                  </a>
+               </div>
             </div>
-        </div>
-    </div>
+         </div>
+      </div>
+      <!-- Sidebar Right -->
+      <div class="sidebar-right">
+         <div class="chat">
+            <div class="chat-tab">
+               <ul>
+                  <li id="btnGlobalChat" class="active">
+                     <a href="javascript:void(0)">Global Chat</a>
+                  </li>
+                  <li id="btnRoomChat">
+                     <a href="javascript:void(0)">Room Chat</a>
+                  </li>
+               </ul>
+            </div>
+            <div id="divGlobalChat" class="chat-content">
+            </div>
+            <div id="divRoomChat" style="display: none;" class="chat-content">
+            </div>
+            <div id="divChatTextArea" class="chat-box">
+               <textarea id="txtChat" placeholder="Bir mesaj gönderin"></textarea>
+               <button id="btnSendChat" class="btn btn-primary">
+                  <i class="fa fa-paper-plane-o"></i>
+               </button>
+            </div>
+         </div>
+      </div>
+   </div>
+
+   <!-- Login -->
+   <div class="modal" id="modalLogin" tabindex="-1">
+      <div class="modal-dialog" role="document">
+         <div class="modal-content">
+            <div class="modal-header">
+               <h5 class="modal-title">Login</h5>
+               <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                  <span aria-hidden="true">×</span>
+               </button>
+            </div>
+            <div class="modal-body">
+               <div>
+                  <div class="form-group">
+                     <label for="txtLoginEmail" class="form-control-label">Email</label>
+                     <input type="text" class="form-control" id="txtLoginEmail">
+                  </div>
+                  <div class="form-group">
+                     <label for="txtLoginPassword" class="form-control-label">Password</label>
+                     <input type="text" class="form-control" id="txtLoginPassword">
+                  </div>
+                  <button type="button" id="btnLogin" class="btn btn-primary">Login</button>
+
+               </div>
+            </div>
+            <div class="modal-footer">
+               Don't have an account yet?
+               <a href="">Subscribe to Tracer® Access</a>
+            </div>
+         </div>
+      </div>
+   </div>
 
 
-    <script>
-        $(document).ready(function () {
-            $('#sidebarCollapse').on('click', function () {
-                $('#sidebar').toggleClass('active');
-            });
+   <script>
+      $(document).ready(function () {
+         $('#sidebarCollapse').on('click', function () {
+            $('#sidebar').toggleClass('active');
+         });
 
-            $("#track").owlCarousel({
-                items: 6,
-                autoPlay: 5000,
-                itemsDesktop: [1199, 6],
-                itemsDesktopSmall: [979, 2],
-                itemsTablet: [768, 2],
-                itemsMobile: [479, 2],
-                responsive: true,
-                pagination: true,
-                navigationText: ["", ""],
-                navigation: true
-            });
-        });
+         $("#track").owlCarousel({
+            items: 6,
+            autoPlay: 5000,
+            itemsDesktop: [1199, 6],
+            itemsDesktopSmall: [979, 2],
+            itemsTablet: [768, 2],
+            itemsMobile: [479, 2],
+            responsive: true,
+            pagination: true,
+            navigationText: ["", ""],
+            navigation: true
+         });
+      });
 
 
 
-    </script>
+   </script>
 
 </body>
 
