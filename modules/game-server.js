@@ -303,9 +303,14 @@ function main(httpServer) {
             } else if (room.drivers[d].status == Enum_Driver_Room_Status.READY)
                ready++;
          }
-         if (ready > 1) {
+         //########################################################################################################################
+         //TODO: Burası > 1 olacak!!!! Yani odada en az iki kişi olmalı odanın hazır olması için. TEST amaçlı 0 yapıldı.
+         //########################################################################################################################
+         if (ready > 0) {
             room.status = Enum_Room_Status.IN_QUEUE_READY;
          }
+         //########################################################################################################################
+         //########################################################################################################################
          room.save();
          UpdateManager.emitUpdate[UpdateManager.UpdateTypes.DRIVER_IS_READY](ActiveDrivers[socket.driver.uuid].room.track_id, ActiveDrivers[socket.driver.uuid].room.uuid, socket.driver.uuid);
          callback({ success: true });
@@ -468,10 +473,12 @@ function main(httpServer) {
          if (!socket.driver || !ActiveDrivers[socket.driver.uuid].room) {
             return;
          }
-
-         socket.leave(ActiveDrivers[socket.driver.uuid].room.uuid);
-         RemoveDriverFromRoom(socket.driver.uuid);
-         callback({ success: true });
+         //We send update in this function.
+         if(RemoveDriverFromRoom(socket.driver.uuid, true)){
+            callback({ success: true });
+         }else{
+            callback({ success: false });
+         }
       });
 
       socket.on('create-room', (data, callback) => {
@@ -807,24 +814,24 @@ function main(httpServer) {
    function RemoveDriverFromRoom(driverid, force) {
       if (!ActiveDrivers[driverid]) {
          console.log("There is no driver to remove form room.");
-         return;
+         return false;
       }
       var room = ActiveDrivers[driverid].room;
       if (!room) {
          console.log("The driver has no room to remove from.");
-         return;
+         return false;
       }
       if (!room.drivers[driverid]) {
          console.log("The room does NOT have this driver.");
          delete ActiveDrivers[driverid].room;
-         return;
+         return false;
       }
       //Do NOT remove driver if his room was taken to the race area. If force==true, then this driver is kicked either by system admin or room admin.
       if (!force &&
          (room.status == Enum_Room_Status.IN_PRE_RACE ||
             room.status == Enum_Room_Status.IN_RACE ||
             room.status == Enum_Room_Status.IN_RACE_RESULT))
-         return;
+         return false;
       //remove driver's socket from the room line
       if (ActiveDrivers[driverid].socket) {
          ActiveDrivers[driverid].socket.leave(room.uuid);
@@ -867,6 +874,7 @@ function main(httpServer) {
          ActiveDrivers[driverid].driver.status = Enum_Driver_Status.ONLINE;
          ActiveDrivers[driverid].driver.save();
       }
+      return true;
    }
 
    ioadmin = io.of('/tradmin');
@@ -1506,9 +1514,9 @@ var RoomPublicViewModel = function (room) {
    for (var driver in room.drivers) {
       if (room.drivers[driver].status == Enum_Driver_Room_Status.OFFLINE)
          model.driver_count.offline++;
-      if (room.drivers[driver].status == Enum_Driver_Room_Status.NOT_READY)
+      else if (room.drivers[driver].status == Enum_Driver_Room_Status.NOT_READY)
          model.driver_count.not_ready++;
-      if (room.drivers[driver].status == Enum_Driver_Room_Status.READY)
+      else if (room.drivers[driver].status == Enum_Driver_Room_Status.READY)
          model.driver_count.ready++;
    }
    return model;

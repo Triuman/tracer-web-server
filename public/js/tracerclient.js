@@ -1118,7 +1118,7 @@ var WebRTCConnection = new function () {
          if (dataChannel && msg)
             dataChannel.send(msg);
          else
-            console.log("Data channel is NULL");
+            console.log("Data channel or message is NULL");
       },
       setOfferLeft: function (sdp) {
          //Each time we get a new offer, we create a new RTCPeerConnection.
@@ -1129,13 +1129,13 @@ var WebRTCConnection = new function () {
 
          // send any ice candidates to the other peer
          pcLeft.onicecandidate = function (evt) {
-            console.log("We got a candidate!");
+            console.log("We got a left candidate!");
             SendIceCandidate(evt.candidate, true);
          };
 
          // once remote stream arrives, show it in the remote video element
          pcLeft.ontrack = function (event) {
-            console.log("We got remote stream!!");
+            console.log("We got left remote stream!!");
             try {
                document.getElementById("remoteViewLeft").srcObject = event.streams[0];
             } catch (err) {
@@ -1196,13 +1196,13 @@ var WebRTCConnection = new function () {
 
          // send any ice candidates to the other peer
          pcRight.onicecandidate = function (evt) {
-            console.log("We got a candidate!");
+            console.log("We got a right candidate!");
             SendIceCandidate(evt.candidate, false);
          };
 
          // once remote stream arrives, show it in the remote video element
          pcRight.ontrack = function (event) {
-            console.log("We got remote stream!!");
+            console.log("We got right remote stream!!");
             try {
                document.getElementById("remoteViewRight").srcObject = event.streams[0];
             } catch (err) {
