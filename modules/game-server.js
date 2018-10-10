@@ -1114,16 +1114,18 @@ function main(httpServer) {
          //If the current room is still in race, return false with reason STILL_IN_RACE.
          if (ActiveTracks[data.track_id].room_id_in_race) {
             var room_in_race = ActiveRooms[ActiveTracks[data.track_id].room_id_in_race];
-            if (room_in_race.status != Enum_Room_Status.IN_RACE_RESULT) {
-               callback({ success: false, reason: Enum_Callback_Reason.STILL_IN_RACE });
-               return;
-            } else {
-               //It is time to close the previous room.
-               room_in_race.status = Enum_Room_Status.CLOSED;
-               room_in_race.save();
-               delete ActiveRooms[room.uuid];
-               //If we close the room, we do not need to send a DRIVER_LEFT_ROOM update. ROOM_CLOSED update is enough.
-               UpdateManager.emitUpdate[UpdateManager.UpdateTypes.ROOM_CLOSED](room_in_race.track_id, room_in_race.uuid);
+            if(room_in_race){
+               if (room_in_race.status != Enum_Room_Status.IN_RACE_RESULT) {
+                  callback({ success: false, reason: Enum_Callback_Reason.STILL_IN_RACE });
+                  return;
+               } else {
+                  //It is time to close the previous room.
+                  room_in_race.status = Enum_Room_Status.CLOSED;
+                  room_in_race.save();
+                  delete ActiveRooms[room.uuid];
+                  //If we close the room, we do not need to send a DRIVER_LEFT_ROOM update. ROOM_CLOSED update is enough.
+                  UpdateManager.emitUpdate[UpdateManager.UpdateTypes.ROOM_CLOSED](room_in_race.track_id, room_in_race.uuid);
+               }
             }
          }
 
