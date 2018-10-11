@@ -809,7 +809,7 @@ function SendAnswer(sdp, isleft) {
 
 function SendIceCandidate(candidate, isleft) {
    socket.emit("candidate", { track_id: my_room_view.track_id, candidate, isleft }, (data) => {
-      console.log("Did we send candidate? -> ");
+      console.log("Did we send candidate? -> " + (isleft?"left":"right"));
       console.log(data);
       if (data.success == false) {
          switch (data.reason) {

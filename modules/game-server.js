@@ -280,13 +280,14 @@ function main(httpServer) {
       socket.on('answer', (data, callback) => {
          if (!socket.driver || !data.sdp)
             return;
-         localServer.sendAnswerSdp(data.track_id, socket.driver.uuid, data.sdp, data.isleft);
+            callback({success: localServer.sendAnswerSdp(data.track_id, socket.driver.uuid, data.sdp, data.isleft)});
       });
 
       socket.on('candidate', (data, callback) => {
-         if (!socket.driver || !data.candidate)
+         console.log(data);
+         if (!socket.driver)
             return;
-         localServer.sendCandidate(data.track_id, socket.driver.uuid, data.candidate, data.isleft);
+         callback({success: localServer.sendCandidate(data.track_id, socket.driver.uuid, data.candidate, data.isleft)});
       });
 
       socket.on('ready', (callback) => {
