@@ -1090,13 +1090,7 @@ function sendCommandToCar() {
 var WebRTCConnection = new function () {
    var pcLeft, pcRight;
    var dataChannel;
-   var configuration = {
-      "iceServers": [{ "urls": ['stun:stun.l.google.com:19302',
-                                 'stun:stun1.l.google.com:19302',
-                                 'stun:stun2.l.google.com:19302',
-                                 'stun:stun3.l.google.com:19302',
-                                 'stun:stun4.l.google.com:19302'] }]
-   };
+   var configuration = {"rtcpMuxPolicy":"require","bundlePolicy":"max-bundle","iceServers":[{"urls":["stun:74.125.140.127:19302","stun:[2a00:1450:400c:c08::7f]:19302"]},{"urls":["turn:74.125.140.127:19305?transport=udp","turn:[2a00:1450:400c:c08::7f]:19305?transport=udp","turn:74.125.140.127:19305?transport=tcp","turn:[2a00:1450:400c:c08::7f]:19305?transport=tcp"],"username":"CL7mg94FEgYlTpRByhUYzc/s6OMTIICjBQ","credential":"hS4DqoS9irtAD3H1lHFdoQe7YAA=","maxRateKbps":"8000"}]};
 
 
    function gotLocalDescriptionLeft(desc) {
@@ -1433,6 +1427,7 @@ var StartVR = new function () {
       }
 
       geometryright.rotateX(-Math.PI / 2);
+      geometryright.rotateZ(Math.PI); //We put right camera upside down so we need to rotate the video.
       materialright = new THREE.MeshBasicMaterial({ map: textureright });
       materialright.side = THREE.BackSide;
       meshright = new THREE.Mesh(geometryright, materialright);
@@ -1483,7 +1478,8 @@ var StartVR = new function () {
    });
 
    function getPose() {
-      return;
+      
+      //return;
       setTimeout(function () {
          if (!vr)
             return;
@@ -1504,6 +1500,7 @@ var StartVR = new function () {
                currentPose = minPoseValue;
             WebRTCConnection.sendDataChannelMessage("2" + currentPose);
             lastPose = currentPose;
+            //pauseVideo();
          }
          getPose();
       }, 100);
@@ -1512,6 +1509,22 @@ var StartVR = new function () {
    this.rotateGeometries = function (angle) {
       meshleft.rotation.set(meshleft.rotation.x, -angle, meshleft.rotation.z);
       meshright.rotation.set(meshright.rotation.x, -angle, meshright.rotation.z);
+      //playVideo();
+   }
+
+   //TODO: Improve this system. This is to remove short blur when cameras move.
+   function playVideo(){
+      setTimeout(function () {
+         videoleft.play();
+         videoright.play();
+      }, 100);
+   }
+
+   function pauseVideo(){
+      setTimeout(function () {
+         videoleft.pause();
+         videoright.pause();
+      }, 100);
    }
 
    return this;
