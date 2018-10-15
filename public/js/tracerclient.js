@@ -44,7 +44,9 @@ const UpdateTypes = {
    DRIVER_IS_NOT_READY: 9,
    ADMIN_CHANGED: 10,
    GLOBAL_CHAT: 11,
-   ROOM_CHAT: 12
+   ROOM_CHAT: 12,
+   CAR_GOT_ONLINE: 13,
+   CAR_GOT_OFFLINE: 14
 };
 
 var driver = null; //This is DriverPrivateModel
@@ -796,7 +798,20 @@ function Register(u, p, e) {
 
 function SendAnswer(sdp, isleft) {
    socket.emit("answer", { track_id: my_room_view.track_id, sdp, isleft }, (data) => {
-      console.log("Did we send answer? -> ");
+      console.log("Did we send the answer? -> ");
+      console.log(data);
+      if (data.success == false) {
+         switch (data.reason) {
+            case Enum_Callback_Reason.DB_ERROR:
+               break;
+         }
+      }
+   });
+}
+
+function SendOffer(sdp, isleft) {
+   socket.emit("offer", { track_id: my_room_view.track_id, sdp, isleft }, (data) => {
+      console.log("Did we send the offer? -> ");
       console.log(data);
       if (data.success == false) {
          switch (data.reason) {
@@ -1090,7 +1105,8 @@ function sendCommandToCar() {
 var WebRTCConnection = new function () {
    var pcLeft, pcRight;
    var dataChannel;
-   var configuration = {"rtcpMuxPolicy":"require","bundlePolicy":"max-bundle","iceServers":[{"urls":["stun:74.125.140.127:19302","stun:[2a00:1450:400c:c08::7f]:19302"]},{"urls":["turn:74.125.140.127:19305?transport=udp","turn:[2a00:1450:400c:c08::7f]:19305?transport=udp","turn:74.125.140.127:19305?transport=tcp","turn:[2a00:1450:400c:c08::7f]:19305?transport=tcp"],"username":"CL7mg94FEgYlTpRByhUYzc/s6OMTIICjBQ","credential":"hS4DqoS9irtAD3H1lHFdoQe7YAA=","maxRateKbps":"8000"}]};
+   var configuration = {"rtcpMuxPolicy":"require","bundlePolicy":"max-bundle",
+   "iceServers":[{"urls":["stun:74.125.140.127:19302","stun:[2a00:1450:400c:c08::7f]:19302"]}]};
 
 
    function gotLocalDescriptionLeft(desc) {
@@ -1124,6 +1140,26 @@ var WebRTCConnection = new function () {
          if (pcLeft)
             pcLeft.close();
          pcLeft = new RTCPeerConnection(configuration);
+
+         var offerLeftSent = false;
+         pcLeft.oniceconnectionstatechange = function(event) {
+            if (pcLeft.iceConnectionState === "failed") {
+               //This time we send the offer
+               if(offerLeftSent){
+                  //We have already sent an offer and it apparently did not work. So we quit.
+                  //TODO: Show some notifications to the driver that the connection was not successful.
+                  return;
+               }
+               offerLeftSent = true;
+               try {
+                  await pcLeft.setLocalDescription(await pcLeft.createOffer());
+                  // send the offer to the other peer
+                  SendOffer(pcLeft.localDescription, true);
+                } catch (err) {
+                  console.error(err);
+                }
+            }
+          };
 
          // send any ice candidates to the other peer
          pcLeft.onicecandidate = function (evt) {
@@ -1191,6 +1227,26 @@ var WebRTCConnection = new function () {
          if (pcRight)
             pcRight.close();
          pcRight = new RTCPeerConnection(configuration);
+
+         var offerRightSent = false;
+         pcRight.oniceconnectionstatechange = function(event) {
+            if (pcRight.iceConnectionState === "failed") {
+               //This time we send the offer
+               if(offerRightSent){
+                  //We have already sent an offer and it apparently did not work. So we quit.
+                  //TODO: Show some notifications to the driver that the connection was not successful.
+                  return;
+               }
+               offerRightSent = true;
+               try {
+                  await pcRight.setLocalDescription(await pcRight.createOffer());
+                  // send the offer to the other peer
+                  SendOffer(pcRight.localDescription, false);
+                } catch (err) {
+                  console.error(err);
+                }
+            }
+          };
 
          // send any ice candidates to the other peer
          pcRight.onicecandidate = function (evt) {
@@ -1278,7 +1334,7 @@ var StartVR = new function () {
       });
 
       videoleft = document.getElementById('remoteViewLeft');
-      //videoleft.muted = true;
+      videoleft.muted = true;
       videoleft.setAttribute('webkit-playsinline', 'webkit-playsinline');
       textureleft = new THREE.Texture(videoleft);
       textureleft.generateMipmaps = false;
@@ -1286,15 +1342,30 @@ var StartVR = new function () {
       textureleft.maxFilter = THREE.NearestFilter;
       textureleft.format = THREE.RGBFormat;
 
+      var audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      var sourceLeft = audioCtx.createMediaElementSource(videoleft);
+      // Create a stereo panner
+      var panNodeLeft = audioCtx.createStereoPanner();
+      sourceLeft.connect(panNodeLeft);
+      panNodeLeft.connect(audioCtx.destination); 
+      panNodeLeft.pan.value = -1;
+      
 
       videoright = document.getElementById('remoteViewRight');
-      //videoright.muted = true;
+      videoright.muted = true;
       videoright.setAttribute('webkit-playsinline', 'webkit-playsinline');
       textureright = new THREE.Texture(videoright);
       textureright.generateMipmaps = false;
       textureright.minFilter = THREE.NearestFilter;
       textureright.maxFilter = THREE.NearestFilter;
       textureright.format = THREE.RGBFormat;
+
+      var sourceRight = audioCtx.createMediaElementSource(videoright);
+      // Create a stereo panner
+      var panNodeRight = audioCtx.createStereoPanner();
+      sourceRight.connect(panNodeRight);
+      panNodeRight.connect(audioCtx.destination); 
+      panNodeRight.pan.value = 1;
 
 
       //###################################################

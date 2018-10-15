@@ -174,6 +174,9 @@ module.exports = {
    sendAnswerSdp: function (track_id, driverid, answersdp, isleft) {
       return this.sendMessage(track_id, { command: "answersdp", answersdp, driverid, isleft });
    },
+   sendOfferSdp: function (track_id, driverid, offersdp, isleft) {
+      return this.sendMessage(track_id, { command: "offersdp", offersdp, driverid, isleft });
+   },
    sendCandidate: function (track_id, driverid, candidate, isleft) {
       return this.sendMessage(track_id, { command: "candidate", candidate, driverid, isleft });
    },

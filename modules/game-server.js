@@ -283,6 +283,12 @@ function main(httpServer) {
             callback({success: localServer.sendAnswerSdp(data.track_id, socket.driver.uuid, data.sdp, data.isleft)});
       });
 
+      socket.on('offer', (data, callback) => {
+         if (!socket.driver || !data.sdp)
+            return;
+            callback({success: localServer.sendOfferSdp(data.track_id, socket.driver.uuid, data.sdp, data.isleft)});
+      });
+
       socket.on('candidate', (data, callback) => {
          console.log(data);
          if (!socket.driver)
@@ -715,7 +721,9 @@ function main(httpServer) {
          DRIVER_IS_NOT_READY: 9,
          ADMIN_CHANGED: 10,
          GLOBAL_CHAT: 11,
-         ROOM_CHAT: 12
+         ROOM_CHAT: 12,
+         CAR_GOT_ONLINE: 13,
+         CAR_GOT_OFFLINE: 14
       };
 
       //emitUpdate does three things; 1) Update Snapshots, 2) Send Public Updates To Everyone 3) Send Private Updates To Drivers in Rooms
@@ -808,6 +816,12 @@ function main(httpServer) {
       this.emitUpdate[this.UpdateTypes.ROOM_CHAT] = function (room_id, username, text) {
          PrivateRoomSnapshots[room_id].chat.push({ username, text });
          io.to(room_id).emit("room-update", { type: _that.UpdateTypes.ROOM_CHAT, data: { username, text } });
+      };
+      this.emitUpdate[this.UpdateTypes.CAR_GOT_ONLINE] = function (track_id, car_id) {
+         ioadmin.emit("update", { type: _that.UpdateTypes.CAR_GOT_ONLINE, data: { track_id, car: ActiveCars[car_id] } });
+      };
+      this.emitUpdate[this.UpdateTypes.CAR_GOT_OFFLINE] = function (track_id, car_id) {
+         ioadmin.emit("update", { type: _that.UpdateTypes.CAR_GOT_ONLINE, data: { track_id, car_id } });
       };
 
    };
@@ -988,6 +1002,8 @@ function main(httpServer) {
          callback({ success: true });
       });
 
+
+      //TODO: Make this track spesific.
       socket.on('getcars', () => {
          //Send Tracks, Rooms and Drivers.
          socket.emit("cars", { cars: ActiveCars });
@@ -1448,26 +1464,27 @@ var localServerCallbacks = {
       //Driver got disconnected from Local Server. If driver is still connected to Web Server, we should try to connect him to LS again.
       //If driver also disconnected from here, we will just wait him to come again. If he doesnt come, timeout in onDisconnect() will remove him from the room.
    },
-   on_carconnected: function (track_id, carName) {
-      Car.findOne({ name: carName }, function (err, car) {
+   on_carconnected: function (track_id, car_id) {
+      Car.findOne({ car_id }, function (err, car) {
          if (err) {
             console.log("Error retriving car from DB. -> " + err);
             return;
          }
          if (car) {
-            //TODO: Notify Admins
-            ActiveCars[car.uuid] = ActiveCars[car.uuid] || {};
-            ActiveCars[car.uuid].name = carName;
-            ActiveCars[car.uuid].track_id = track_id;
-            ActiveCars[car.uuid].status = "online";
+            ActiveCars[car.uuid] = car;
+            car.status = "online";
+            car.save();
+            UpdateManager.emitUpdate[UpdateManager.UpdateTypes.CAR_GOT_ONLINE](track_id, car_id);
          }
       });
 
    },
    on_cardisconnected: function (track_id, carId) {
-      //TODO: Notify Admins
-      if (ActiveCars[carId])
+      if (ActiveCars[carId]){
          ActiveCars[carId].status = "offline";
+         ActiveCars[carId].save();
+         UpdateManager.emitUpdate[UpdateManager.UpdateTypes.CAR_GOT_OFFLINE](track_id, car_id);
+      }
    },
    on_car_lap: function (track_id, carId) {
       //TODO: Notify Admins

@@ -40,7 +40,9 @@ const UpdateTypes = {
    DRIVER_IS_NOT_READY: 9,
    ADMIN_CHANGED: 10,
    GLOBAL_CHAT: 11,
-   ROOM_CHAT: 12
+   ROOM_CHAT: 12,
+   CAR_GOT_ONLINE: 13,
+   CAR_GOT_OFFLINE: 14
 };
 
 var socket;
@@ -76,6 +78,7 @@ window.onload = function () {
          console.log("Is there any room in race? -> ");
          console.log(data);
       });
+      socket.emit("getcars");
    });
 
    socket.on('update', (update) => {
@@ -485,6 +488,35 @@ UpdateHandler[UpdateTypes.GLOBAL_CHAT] = function (data) {
       $("#divGlobalChat").append(chatContent);
       setChatAreaHeight();
    }
+};
+UpdateHandler[UpdateTypes.CAR_GOT_ONLINE] = function (data) {
+   //Insert car into the car list.
+   //data: { track_id, car }
+   var car = data.car;
+   cars[data.car.uuid] = car;
+   
+   var carNo = 0;
+   for(var carId in cars)
+      carNo++;
+   $("#txtCarName" + carNo).html(car.name);
+   $("#txtCarName" + carNo).data("uuid", car.uuid);
+   $("#txtCarName" + carNo).attr("style", "margin-bottom: 30px;");
+   if($("#txtDriverName" + carNo).data("uuid")!="")
+      SetDriverOfCar(activeTrack.uuid, $("#txtDriverName" + carNo).data("uuid"), car.uuid);
+};
+UpdateHandler[UpdateTypes.CAR_GOT_OFFLINE] = function (data) {
+   //Remove car from the car list.
+   //data: { track_id, car }
+   
+   var carNo = 0;
+   for(var carId in cars)
+      carNo++;
+
+   delete cars[data.car_id];
+   
+   $("#txtCarName" + carNo).html("EMPTY");
+   $("#txtCarName" + carNo).data("uuid", "");
+   $("#txtCarName" + carNo).attr("style", "margin-bottom: 30px;color: gray;");
 };
 
 function Authenticate(u, p) {
