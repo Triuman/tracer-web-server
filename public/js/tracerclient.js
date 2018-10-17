@@ -295,10 +295,8 @@ function StartSocket() {
    socket.on('createoffer', (data) => {
       console.log("Got an offer request!");
       my_room_view = { track_id: data.track_id }; //We use this when we send an answer/offer back.
+      WebRTCConnection.createOfferLeft();
       WebRTCConnection.createOfferRight();
-      setTimeout(function(){
-         WebRTCConnection.createOfferLeft();
-      }, 2000);
    });
 
 
@@ -1125,9 +1123,6 @@ var WebRTCConnection = new function () {
    var configuration = {
       "iceServers": [{ "urls": ["stun:74.125.140.127:19302", "stun:[2a00:1450:400c:c08::7f]:19302"] }]
    };
-   var constraints = {
-      optional: [{ RtpDataChannels: true }]
-   };
 
    function gotLocalDescriptionLeft(desc) {
       pcLeft.setLocalDescription(desc);
@@ -1152,10 +1147,11 @@ var WebRTCConnection = new function () {
       };
       if (dataChannel)
          dataChannel.close();
-      dataChannel = pc.createDataChannel("mychannel", {});
+      dataChannel = pc.createDataChannel("mychannel", dataChannelOptions);
 
       dataChannel.onerror = function (error) {
          console.log("Data Channel Error:", error);
+         removeKeyEvents();
       };
 
       var localCameraStreamDelay = 250; //ms
@@ -1199,7 +1195,7 @@ var WebRTCConnection = new function () {
 
          if (pcLeft)
             pcLeft.close();
-         pcLeft = new RTCPeerConnection(configuration, constraints);
+         pcLeft = new RTCPeerConnection(configuration);
 
          var offerLeftSent = false;
          pcLeft.oniceconnectionstatechange = function (event) {
@@ -1249,7 +1245,7 @@ var WebRTCConnection = new function () {
 
          if (pcRight)
             pcRight.close();
-         pcRight = new RTCPeerConnection(configuration, constraints);
+         pcRight = new RTCPeerConnection(configuration);
 
          var offerRightSent = false;
          pcRight.oniceconnectionstatechange = function (event) {
