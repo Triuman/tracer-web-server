@@ -292,16 +292,32 @@ function StartSocket() {
       ProcessRoomSnapshot(data.room_private_view);
    });
 
+   socket.on('createoffer', (data) => {
+      console.log("Got an offer request!");
+      my_room_view = { track_id: data.track_id }; //We use this when we send an answer/offer back.
+      WebRTCConnection.createOfferRight();
+      setTimeout(function(){
+         WebRTCConnection.createOfferLeft();
+      }, 2000);
+   });
 
 
    socket.on('offer', (data) => {
       console.log("Got offer! -> ", data.sdp);
       // TODO: Remove the line below.
-      my_room_view = { track_id: data.track_id };
+      my_room_view = { track_id: data.track_id }; //We use this when we send an answer/offer back.
       if (data.isleft)
          WebRTCConnection.setOfferLeft(data.sdp);
       else
          WebRTCConnection.setOfferRight(data.sdp);
+   });
+
+   socket.on('answer', (data) => {
+      console.log("Got answer! -> ", data.sdp, data.isleft);
+      if (data.isleft)
+         WebRTCConnection.setAnswerLeft(data.sdp);
+      else
+         WebRTCConnection.setAnswerRight(data.sdp);
    });
 
    socket.on('room-update', (update) => {
@@ -810,6 +826,7 @@ function SendAnswer(sdp, isleft) {
 }
 
 function SendOffer(sdp, isleft) {
+   console.log("We are sending an offer->", sdp);
    socket.emit("offer", { track_id: my_room_view.track_id, sdp, isleft }, (data) => {
       console.log("Did we send the offer? -> ");
       console.log(data);
@@ -824,7 +841,7 @@ function SendOffer(sdp, isleft) {
 
 function SendIceCandidate(candidate, isleft) {
    socket.emit("candidate", { track_id: my_room_view.track_id, candidate, isleft }, (data) => {
-      console.log("Did we send candidate? -> " + (isleft?"left":"right"));
+      console.log("Did we send candidate? -> " + (isleft ? "left" : "right"));
       console.log(data);
       if (data.success == false) {
          switch (data.reason) {
@@ -1105,9 +1122,12 @@ function sendCommandToCar() {
 var WebRTCConnection = new function () {
    var pcLeft, pcRight;
    var dataChannel;
-   var configuration = {"rtcpMuxPolicy":"require","bundlePolicy":"max-bundle",
-   "iceServers":[{"urls":["stun:74.125.140.127:19302","stun:[2a00:1450:400c:c08::7f]:19302"]}]};
-
+   var configuration = {
+      "iceServers": [{ "urls": ["stun:74.125.140.127:19302", "stun:[2a00:1450:400c:c08::7f]:19302"] }]
+   };
+   var constraints = {
+      optional: [{ RtpDataChannels: true }]
+   };
 
    function gotLocalDescriptionLeft(desc) {
       pcLeft.setLocalDescription(desc);
@@ -1125,6 +1145,46 @@ var WebRTCConnection = new function () {
       console.log("Couldnt create answer RIGHT.");
    }
 
+   function createDataChannel(pc) {
+      var dataChannelOptions = {
+         ordered: false, // do not guarantee order
+         maxPacketLifeTime: 10, // in milliseconds
+      };
+      if (dataChannel)
+         dataChannel.close();
+      dataChannel = pc.createDataChannel("mychannel", {});
+
+      dataChannel.onerror = function (error) {
+         console.log("Data Channel Error:", error);
+      };
+
+      var localCameraStreamDelay = 250; //ms
+      dataChannel.onmessage = function (event) {
+         console.log("Got Data Channel Message:", event.data);
+         if (event.data[0] == "2") {
+            //We got a camera servo control message. No we can rotate our Sphere to match the camera positions.
+            //WebRTCConnection.sendDataChannelMessage("2" + Math.floor(-pose * 50 + 50));
+            //We are simulating the camera latency.
+            setTimeout(function () {
+               var pose = (parseInt(event.data[1] + event.data[2]) - 50) / -50;
+               StartVR.rotateGeometries(pose * Math.PI / 2 * 1.4);
+            }, localCameraStreamDelay);
+         }
+      };
+
+      dataChannel.onopen = function () {
+         console.log("The Data Channel is Open!");
+         dataChannel.send("0" + driver.uuid);
+         addKeyEvents();
+      };
+
+      dataChannel.onclose = function () {
+         console.log("The Data Channel is Closed");
+         removeKeyEvents();
+      };
+
+   }
+
    return {
       sendDataChannelMessage: function (msg) {
          console.log("sending datachannel message");
@@ -1139,27 +1199,27 @@ var WebRTCConnection = new function () {
 
          if (pcLeft)
             pcLeft.close();
-         pcLeft = new RTCPeerConnection(configuration);
+         pcLeft = new RTCPeerConnection(configuration, constraints);
 
          var offerLeftSent = false;
-         pcLeft.oniceconnectionstatechange = function(event) {
+         pcLeft.oniceconnectionstatechange = function (event) {
             if (pcLeft.iceConnectionState === "failed") {
                //This time we send the offer
-               if(offerLeftSent){
+               if (offerLeftSent) {
                   //We have already sent an offer and it apparently did not work. So we quit.
                   //TODO: Show some notifications to the driver that the connection was not successful.
                   return;
                }
                offerLeftSent = true;
-               try {
-                  await pcLeft.setLocalDescription(await pcLeft.createOffer());
-                  // send the offer to the other peer
-                  SendOffer(pcLeft.localDescription, true);
-                } catch (err) {
-                  console.error(err);
-                }
+
+               pcLeft.createOffer().then(function (offer) {
+                  return pcLeft.setLocalDescription(offer);
+               })
+                  .then(function () {
+                     SendOffer(pcLeft.localDescription, true);
+                  });
             }
-          };
+         };
 
          // send any ice candidates to the other peer
          pcLeft.onicecandidate = function (evt) {
@@ -1182,71 +1242,34 @@ var WebRTCConnection = new function () {
             pcLeft.createAnswer(gotLocalDescriptionLeft, failedLocalDescriptionLeft);
          });
 
-         var dataChannelOptions = {
-            ordered: false, // do not guarantee order
-            maxRetransmitTime: 10, // in milliseconds
-         };
-         if (dataChannel)
-            dataChannel.close();
-         dataChannel = pcLeft.createDataChannel("mychannel", dataChannelOptions);
-
-         dataChannel.onerror = function (error) {
-            console.log("Data Channel Error:", error);
-         };
-
-         var localCameraStreamDelay = 250; //ms
-         dataChannel.onmessage = function (event) {
-            console.log("Got Data Channel Message:", event.data);
-            if (event.data[0] == "2") {
-               //We got a camera servo control message. No we can rotate our Sphere to match the camera positions.
-               //WebRTCConnection.sendDataChannelMessage("2" + Math.floor(-pose * 50 + 50));
-               //We are simulating the camera latency.
-               setTimeout(function () {
-                  var pose = (parseInt(event.data[1] + event.data[2]) - 50) / -50;
-                  StartVR.rotateGeometries(pose * Math.PI / 2 * 1.4);
-               }, localCameraStreamDelay);
-            }
-         };
-
-         dataChannel.onopen = function () {
-            console.log("The Data Channel is Open!");
-            dataChannel.send("0" + driver.uuid);
-            addKeyEvents();
-         };
-
-         dataChannel.onclose = function () {
-            console.log("The Data Channel is Closed");
-            removeKeyEvents();
-         };
-
-
+         createDataChannel(pcLeft);
       },
       setOfferRight: function (sdp) {
          //Each time we get a new offer, we create a new RTCPeerConnection.
 
          if (pcRight)
             pcRight.close();
-         pcRight = new RTCPeerConnection(configuration);
+         pcRight = new RTCPeerConnection(configuration, constraints);
 
          var offerRightSent = false;
-         pcRight.oniceconnectionstatechange = function(event) {
+         pcRight.oniceconnectionstatechange = function (event) {
             if (pcRight.iceConnectionState === "failed") {
                //This time we send the offer
-               if(offerRightSent){
+               if (offerRightSent) {
                   //We have already sent an offer and it apparently did not work. So we quit.
                   //TODO: Show some notifications to the driver that the connection was not successful.
                   return;
                }
                offerRightSent = true;
-               try {
-                  await pcRight.setLocalDescription(await pcRight.createOffer());
-                  // send the offer to the other peer
-                  SendOffer(pcRight.localDescription, false);
-                } catch (err) {
-                  console.error(err);
-                }
+
+               pcRight.createOffer().then(function (offer) {
+                  return pcRight.setLocalDescription(offer);
+               })
+                  .then(function () {
+                     SendOffer(pcRight.localDescription, false);
+                  });
             }
-          };
+         };
 
          // send any ice candidates to the other peer
          pcRight.onicecandidate = function (evt) {
@@ -1270,6 +1293,84 @@ var WebRTCConnection = new function () {
          });
 
       },
+      createOfferLeft: function () {
+         pcLeft = new RTCPeerConnection(configuration);
+         createDataChannel(pcLeft);
+         pcLeft.createOffer({
+            optional: [],
+            // Chrome
+            mandatory: {
+              'OfferToReceiveAudio': true,
+              'OfferToReceiveVideo': true
+            },
+            // Firefox
+            'offerToReceiveAudio': true,
+            'offerToReceiveVideo': true
+          }).then(function (offer) {
+            return pcLeft.setLocalDescription(offer);
+         })
+         .then(function () {
+            SendOffer(pcLeft.localDescription, true);
+         });
+
+         // send any ice candidates to the other peer
+         pcLeft.onicecandidate = function (evt) {
+            console.log("We got a left candidate!");
+            SendIceCandidate(evt.candidate, true);
+         };
+
+         // once remote stream arrives, show it in the remote video element
+         pcLeft.ontrack = function (event) {
+            console.log("We got left remote stream!!");
+            try {
+               document.getElementById("remoteViewLeft").srcObject = event.streams[0];
+            } catch (err) {
+               document.getElementById("remoteViewLeft").src = URL.createObjectURL(event.streams[0]);
+            }
+         };
+      },
+      createOfferRight: function () {
+         pcRight = new RTCPeerConnection(configuration);
+         //createDataChannel(pcRight);
+         pcRight.createOffer({
+            optional: [],
+            // Chrome
+            mandatory: {
+              'OfferToReceiveAudio': true,
+              'OfferToReceiveVideo': true
+            },
+            // Firefox
+            'offerToReceiveAudio': true,
+            'offerToReceiveVideo': true
+          }).then(function (offer) {
+            return pcRight.setLocalDescription(offer);
+         })
+         .then(function () {
+            SendOffer(pcRight.localDescription, false);
+         });
+
+         // send any ice candidates to the other peer
+         pcRight.onicecandidate = function (evt) {
+            console.log("We got a right candidate!");
+            SendIceCandidate(evt.candidate, false);
+         };
+
+         // once remote stream arrives, show it in the remote video element
+         pcRight.ontrack = function (event) {
+            console.log("We got right remote stream!!");
+            try {
+               document.getElementById("remoteViewRight").srcObject = event.streams[0];
+            } catch (err) {
+               document.getElementById("remoteViewRight").src = URL.createObjectURL(event.streams[0]);
+            }
+         };
+      },
+      setAnswerLeft: function (sdp) {
+         pcLeft.setRemoteDescription(new RTCSessionDescription({ type: "answer", sdp }));
+      },
+      setAnswerRight: function (sdp) {
+         pcRight.setRemoteDescription(new RTCSessionDescription({ type: "answer", sdp }));
+      },
       setIceCandidateLeft: function (candidate) {
          pcLeft.addIceCandidate(new RTCIceCandidate(candidate));
       },
@@ -1289,6 +1390,13 @@ function AddVREventListeners() {
 
 
 var StartVR = new function () {
+
+   //#################################################################################################
+   //#################################################################################################
+   //Remove this return and comment out the line StartVR.init()
+   return;
+   //#################################################################################################
+   //#################################################################################################
 
    var scene = new THREE.Scene();
    var fov = 90;
@@ -1347,9 +1455,9 @@ var StartVR = new function () {
       // Create a stereo panner
       var panNodeLeft = audioCtx.createStereoPanner();
       sourceLeft.connect(panNodeLeft);
-      panNodeLeft.connect(audioCtx.destination); 
+      panNodeLeft.connect(audioCtx.destination);
       panNodeLeft.pan.value = -1;
-      
+
 
       videoright = document.getElementById('remoteViewRight');
       videoright.muted = true;
@@ -1364,7 +1472,7 @@ var StartVR = new function () {
       // Create a stereo panner
       var panNodeRight = audioCtx.createStereoPanner();
       sourceRight.connect(panNodeRight);
-      panNodeRight.connect(audioCtx.destination); 
+      panNodeRight.connect(audioCtx.destination);
       panNodeRight.pan.value = 1;
 
 
@@ -1549,7 +1657,7 @@ var StartVR = new function () {
    });
 
    function getPose() {
-      
+
       //return;
       setTimeout(function () {
          if (!vr)
@@ -1584,14 +1692,14 @@ var StartVR = new function () {
    }
 
    //TODO: Improve this system. This is to remove short blur when cameras move.
-   function playVideo(){
+   function playVideo() {
       setTimeout(function () {
          videoleft.play();
          videoright.play();
       }, 100);
    }
 
-   function pauseVideo(){
+   function pauseVideo() {
       setTimeout(function () {
          videoleft.pause();
          videoright.pause();
@@ -1603,6 +1711,6 @@ var StartVR = new function () {
 
 window.onload = function () {
    StartSocket();
-   StartVR.init();
+   //StartVR.init();
    AddButtonEvents();
 };

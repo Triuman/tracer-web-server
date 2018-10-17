@@ -1406,6 +1406,9 @@ var localServerCallbacks = {
       //This is when LS gets its first connection from Web Server after LS restarted. If there is a room in race we need to send create race command.
       localServer.setTrackLines(track_id, [1, 2, 3, 4, 5], [6, 7, 8, 9, 1]);
    },
+   on_offerrequest: function(track_id, driverId){
+      ActiveDrivers[driverId].socket.emit("createoffer", { track_id });
+   },
    on_offer: function (track_id, driverId, sdp, isleft) {
       //COMMENT OUT HERE #################################################
       //COMMENT OUT HERE #################################################
@@ -1416,6 +1419,10 @@ var localServerCallbacks = {
       // }
       ActiveDrivers[driverId].socket.emit("offer", { track_id, sdp, isleft });
    },
+   on_answer: function (track_id, driverId, sdp, isleft) {
+      ActiveDrivers[driverId].socket.emit("answer", { track_id, sdp, isleft });
+   },
+
    on_webrtcup: function (track_id, driverId) {
       //Check if driver is in a room and room has a status IN_RACE, if so, connect him to the car
       if (!ActiveDrivers[driverId]) {

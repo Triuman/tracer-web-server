@@ -34,10 +34,18 @@ module.exports = {
                        //This means LS was restarted and has no info about track lines, race and drivers. If there is a room in race, we need to call create race.
                        gameServer.on_firstconnection(ws.track.uuid);
                        break;
+                     case 'offerrequest':
+                        //Send sdp to game server with driverId
+                        gameServer.on_offerrequest(ws.track.uuid, request.driverid);
+                        break;
                      case 'offer':
                        //Send sdp to game server with driverId
                        gameServer.on_offer(ws.track.uuid, request.driverid, request.sdp, request.isleft);
                        break;
+                     case 'answer':
+                        //Send sdp to game server with driverId
+                        gameServer.on_answer(ws.track.uuid, request.driverid, request.sdp, request.isleft);
+                        break;
                      case 'webrctup':
                        //Let Game Server know that driver connected to Local Server via WebRTC
                        gameServer.on_webrtcup(ws.track.uuid, request.driverid);
